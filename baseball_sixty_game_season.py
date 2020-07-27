@@ -120,10 +120,11 @@ divisons_by_year_teams = {}
 teams_city_name = {}
 # Define dictionary to retrieve each team's record at 60 games
 sixty_game_record = {}
+seconds_sleep_short, seconds_sleep_long = 5, 20
 
 for year in range(1994, 2020):
     print('f')
-    for month, day in product([6, 7], range(1, monthrange(year, june)[1] + 1)): #1
+    for month, day in product([6, 7], range(1, monthrange(year, june)[1] + 1)):
         print('e')
         if len(str(day)) == 1:
             day = str(day).zfill(2)
@@ -139,7 +140,7 @@ for year in range(1994, 2020):
             print('Current URL is not correct.')
             driver.find_elements(By.XPATH, value="//li[contains(@class, 'regularSeason')]")[0].click()
             print(f'Current URL: {driver.current_url}')
-            time.sleep(30)
+            time.sleep(seconds_sleep_long) #30
         # Retrieve standings and team statistics
         try:
             team_statistics_element = wait(driver, 120).until(EC.presence_of_element_located((By.XPATH,
@@ -151,7 +152,7 @@ for year in range(1994, 2020):
                                                                    "baseball-standings g5-component--baseball-standings-"
                                                                    "initiated g5-component--mlb g5-component--is-en g5-"
                                                                    "component--is-visible']")
-            time.sleep(10)
+            time.sleep(seconds_sleep_short)
             print(standings_info)
             # print(standings_info.text)
             print('Standings_info retrieved from site.')
@@ -168,7 +169,7 @@ for year in range(1994, 2020):
                                                                    "baseball-standings g5-component--baseball-standings-"
                                                                    "initiated g5-component--mlb g5-component--is-en g5-"
                                                                    "component--is-visible']")
-            time.sleep(10)
+            time.sleep(seconds_sleep_short)
             print(standings_info)
             print('Standings_info retrieved from site after refresh.')
         # Split on new line
@@ -210,18 +211,18 @@ for year in range(1994, 2020):
                 team_info_element = wait(driver, 120).until(EC.presence_of_element_located((By.XPATH,
                                                                        "//div[@class='table-wrapper-3-qU3HfQ']")))
                 team_info = driver.find_element(By.XPATH, value="//div[@class='table-wrapper-3-qU3HfQ']").text.split('\n')
-                time.sleep(10)
+                time.sleep(seconds_sleep_short)
                 print(team_info)
                 # print(standings_info.text)
                 print('team_info retrieved from site.')
-            except (NoSuchElementException, TimeoutException):
+            except (NoSuchElementException, TimeoutException, KeyError):
                 print('Error here.')
                 driver.refresh()
                 print('Page refreshed.')
                 team_info_element = wait(driver, 120).until(EC.presence_of_element_located((By.XPATH,
                                                                                             "//div[@class='table-wrapper-3-qU3HfQ']")))
                 team_info = driver.find_element(By.XPATH, value="//div[@class='table-wrapper-3-qU3HfQ']").text.split('\n')
-                time.sleep(10)
+                time.sleep(seconds_sleep_short)
                 print(team_info)
                 # print(standings_info.text)
                 print('team_info retrieved from site after refresh.')
@@ -290,7 +291,7 @@ for year in range(1994, 2020):
                         print('Current URL is not correct.')
                         driver.find_elements(By.XPATH, value="//li[contains(@class, 'regularSeason')]")[0].click()
                         print(f'Current URL: {driver.current_url}')
-                        time.sleep(30)
+                        time.sleep(seconds_sleep_long) #30
                     # Retrieve standings and team statistics
                     try:
                         team_statistics_element = wait(driver, 120).until(EC.presence_of_element_located((By.XPATH,
@@ -302,7 +303,7 @@ for year in range(1994, 2020):
                                                                                "baseball-standings g5-component--baseball-standings-"
                                                                                "initiated g5-component--mlb g5-component--is-en g5-"
                                                                                "component--is-visible']")
-                        time.sleep(10)
+                        time.sleep(seconds_sleep_short)
                         print(standings_info)
                         # print(standings_info.text)
                         print('Standings_info retrieved from site.')
@@ -328,48 +329,72 @@ for year in range(1994, 2020):
                     standings_info = [[standings_info[i - 1], standings_info[i]] for i, v in enumerate(standings_info) if
                                       re.match(r'\w{2}\s{1}\w{2}\s{1}\.\w{3}', v)]
 
-                    for team_not_sixty in teams_to_extract_further:
-                        print('a')
+                    for index, team_not_sixty in enumerate(teams_to_extract_further, start=1):
+                        print(f'{index} - {team_not_sixty}')
                         for team_info in standings_info:
-                            print('b')
                             if team_info[0] == team_not_sixty:
                                 if sum([int(j) for j in [i for i in team_info[1].split(" ")[:2]]]) == 59:
-                                    day = int(day) + 1
-                                    if len(str(day)) == 1:
-                                        day = str(day).zfill(2)
-                                    driver.get("https://www.mlb.com/scores" + f'/{year}' + '-' f'{month:02}' + '-' + f'{day}')
-                                    print(f'Current URL: {driver.current_url}')
-                                    try:
-                                        games_element = wait(driver, 120).until(EC.presence_of_element_located((By.XPATH,
-                                                                            "//div[@id='gridWrapper']")))
-                                        games = driver.find_element(By.XPATH, value="//div[@id='gridWrapper']").text.split('\n')
-                                        time.sleep(10)
-                                        print(team_info)
-                                        # print(standings_info.text)
-                                        print('games retrieved from site.')
-                                    except (NoSuchElementException, TimeoutException):
-                                        print('Error here.')
-                                        driver.refresh()
-                                        print('Page refreshed.')
-                                        games_element = wait(driver, 120).until(EC.presence_of_element_located((By.XPATH,
-                                                                            "//div[@id='gridWrapper']")))
-                                        games = driver.find_element(By.XPATH, value="//div[@id='gridWrapper']").text.split('\n')
-                                        time.sleep(10)
-                                        print(team_info)
-                                        # print(standings_info.text)
-                                        print('games retrieved from site after refresh.')
-                                    if [i for i in teams_city_name[year] if team_not_sixty in
-                                        i][0][len(team_not_sixty):].strip() in games:
-                                        for i in [i for i, v in enumerate(games) if v == [i for i in teams_city_name[year]
-                                             if team_not_sixty in i][0][len(team_not_sixty):].strip()]:
-                                            print('c')
-                                            if sum([int(i.strip()) for i in games[i + 1].split("-")]) == 60:
-                                                sixty_game_record[year].extend([[j for j in teams_city_name[year] if
-                                                        games[i] in j][0][:-len(games[i])].strip(), games[i + 1]])
-                                                print(f'{[[j for j in teams_city_name[year] if games[i] in j][0][:-len(games[i])].strip(), games[i                                                  + 1]]} added to sixty_game_record for {year}')
-                                                print(f'Number of teams in sixty_game_record for {year}: '
-                                                      f'{len(sixty_game_record[year][0::2])}')
-                                                print(set(team_list) == set(sixty_game_record[year][0::2]))
+                                    print(f'{team_not_sixty} played their 59th game as of {month, day, year}')
+                                    for d in range(int(day) + 1, monthrange(year, june)[1] + 1):
+                                        print(f'd: {d}')
+                                    # day = int(day) + 1
+                                        if len(str(d)) == 1:
+                                            d = str(d).zfill(2)
+                                        driver.get("https://www.mlb.com/scores" + f'/{year}' + '-' f'{month:02}' + '-' + f'{d}')
+                                        print(f'Current URL: {driver.current_url}')
+                                        try:
+                                            games_element = wait(driver, 120).until(EC.presence_of_element_located((By.XPATH,
+                                                                                "//div[@id='gridWrapper']")))
+                                            games = driver.find_element(By.XPATH, value="//div[@id='gridWrapper']").text.split('\n')
+                                            time.sleep(seconds_sleep_short)
+                                            # print(team_info)
+                                            # print(standings_info.text)
+                                            print('games retrieved from site.')
+                                        except (NoSuchElementException, TimeoutException):
+                                            print('Error here.')
+                                            driver.refresh()
+                                            print('Page refreshed.')
+                                            games_element = wait(driver, 120).until(EC.presence_of_element_located((By.XPATH,
+                                                                                "//div[@id='gridWrapper']")))
+                                            games = driver.find_element(By.XPATH, value="//div[@id='gridWrapper']").text.split('\n')
+                                            time.sleep(seconds_sleep_short)
+                                            # print(team_info)
+                                            # print(standings_info.text)
+                                            print('games retrieved from site after refresh.')
+                                        try:
+                                            if [i for i in teams_city_name[year] if team_not_sixty in
+                                                i][0][len(team_not_sixty):].strip() in games:
+                                                for i in [i for i, v in enumerate(games) if v == [i for i in teams_city_name[year]
+                                                     if team_not_sixty in i][0][len(team_not_sixty):].strip()]:
+                                                    print([i for i in teams_city_name[year] if team_not_sixty in
+                                                        i][0][len(team_not_sixty):].strip())
+                                                    if sum([int(i.strip()) for i in games[i + 1].split("-")]) == 60:
+                                                        sixty_game_record[year].extend([[j for j in teams_city_name[year] if
+                                                                games[i] in j][0][:-len(games[i])].strip(), games[i + 1]])
+                                                        print(f'{[[j for j in teams_city_name[year] if games[i] in j][0][:-len(games[i])].strip(), games[i                                                  + 1]]} added to sixty_game_record for {year}')
+                                                        print(f'Number of teams in sixty_game_record for {year}: '
+                                                              f'{len(sixty_game_record[year][0::2])}')
+                                                        print(set(team_list) == set(sixty_game_record[year][0::2]))
+                                                        break
+                                                break
+                                        except IndexError:
+                                            if [i for i in teams_city_name[year] if team_not_sixty.replace("NY", "New York").
+                                                replace("LA", "Los Angeles").replace("Chi", "Chicago") in i][0].replace("New York",
+                                                "").replace("Los Angeles", "").replace("Chicago", "").strip() in games:
+                                                for i in [i for i, v in enumerate(games) if v == [i for i in teams_city_name[year] if
+                                                    team_not_sixty.replace("NY", "New York").replace("LA",
+                                                    "Los Angeles").replace("Chi", "Chicago") in i][0].replace("New York",
+                                                    "").replace("Los Angeles", "").replace("Chicago", "").strip()]:
+                                                    print('h')
+                                                    if sum([int(i.strip()) for i in games[i + 1].split("-")]) == 60:
+                                                        sixty_game_record[year].extend([[j.replace("New York",
+                                                               "NY").replace("Los Angeles", "LA").replace("Chicago", "Chi")
+                                                               for j in teams_city_name[year] if games[i] in j][0], games[i + 1]])
+                                                        print(f'{[[j.replace("New York","NY").replace("Los Angeles", "LA").replace("Chicago", "Chi") for j in teams_city_name[year] if games[i] in j][0], games[i + 1]]} added to sixty_game_record for {year}')
+                                                        print(f'Number of teams in sixty_game_record for {year}: '
+                                                              f'{len(sixty_game_record[year][0::2])}')
+                                                        print(set(team_list) == set(sixty_game_record[year][0::2]))
+                                                        break
                                                 break
                                 break
         except KeyError:
@@ -392,9 +417,9 @@ for year in range(1994, 2020):
 
         print("\n")
         print(f'Current information in sixty_game_record ({len(sixty_game_record[year][0::2])} out of the total '
-              f'{team_counter} teams for {year}):')
-        for i in sixty_game_record[year]:
-            print(i)
+              f'{team_counter} teams for {year})')
+        # for i in sixty_game_record[year]:
+        #     print(i)
 
         if set(team_list) != set(sixty_game_record[year][0::2]):
             print(f'Do not have full set of teams for {year} season.')
