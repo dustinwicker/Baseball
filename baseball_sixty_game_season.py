@@ -4,10 +4,13 @@ import os
 import re
 import pickle
 import yaml
+import seaborn as sns
+from scipy import stats
 from calendar import monthrange
 from selenium import webdriver
+from collections import Counter
 from more_itertools import unique_everseen
-from itertools import product
+from itertools import product, chain
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait as wait
@@ -616,98 +619,536 @@ all_info.loc[all_info.sixty_game_win_percentage.isnull(), 'sixty_game_win_percen
     (all_info.loc[all_info.sixty_game_win_percentage.isnull(), 'sixty_game_wins'] +
      all_info.loc[all_info.sixty_game_win_percentage.isnull(), 'sixty_game_losses'])
 
+# Drop the 1994 year - strike shortened season
+all_info = all_info.drop(1994)
+
+
 # Fill None values
 # all_info.fillna("-")
 
-# Create Sorted Dataframe
-all_info = all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
-                                          ascending=[True, False, True])
+# Sort Dataframe
+# all_info = all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
+#                                           ascending=[True, False, True])
 
+# List of None value to use in df.query
+none_values = [None]
+
+al_teams_in_playoff_contention_sixty_game_wins_win_percentage = {}
+al_teams_in_division_lead_sixty_game_wins_win_percentage = {}
+al_teams_in_wild_card_contention_sixty_game_wins_win_percentage = {}
+
+al_teams_in_playoffs_sixty_game_wins_win_percentage_season_wins_win_percentage = {}
+al_teams_division_winners_sixty_game_wins_win_percentage_season_wins_win_percentage = {}
+al_teams_wild_card_winners_sixty_game_wins_win_percentage_season_wins_win_percentage = {}
+
+nl_teams_in_playoff_contention_sixty_game_wins_win_percentage = {}
+nl_teams_in_division_lead_sixty_game_wins_win_percentage = {}
+nl_teams_in_wild_card_contention_sixty_game_wins_win_percentage = {}
+
+nl_teams_in_playoffs_sixty_game_wins_win_percentage_season_wins_win_percentage = {}
+nl_teams_division_winners_sixty_game_wins_win_percentage_season_wins_win_percentage = {}
+nl_teams_wild_card_winners_sixty_game_wins_win_percentage_season_wins_win_percentage = {}
+
+al_contention_playoff_in_in_in_out_out_in = {}
+nl_contention_playoff_in_in_in_out_out_in = {}
+
+# Check if divisions are same every year or unique each year
+divisions_same_each_year = []
+for year in all_info.groupby(level=0)['division'].unique().index[1:]:
+    divisions_same_each_year.extend([set(all_info.groupby(level=0)['division'].unique()[1995]) == set(
+        all_info.groupby(level=0)['division'].unique()[year])])
+if set(divisions_same_each_year) == {True}:
+    print("Divisions each year are the same in both leagues and lists containing AL and NL divisions have been created.")
+    # Create list of AL divisions
+    al_divisions = [x for x in all_info.groupby(level=0)['division'].unique()[year] if x[0:2] == "AL"]
+    # Create list of NL divisions
+    nl_divisions = [x for x in all_info.groupby(level=0)['division'].unique()[year] if x[0:2] == "NL"]
+else:
+    print("Divisions each year are not the same in both leagues")
 
 
 # Standings at 60 game mark
-for year in all_info.index.levels[0]:
-    print('*'*60)
+for year in all_info.index.get_level_values(0).unique():
+    print('*'*100)
     print(f'Year: {year}')
     print(all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
                                          ascending=[True, False, True]))
     print('\n' * 1)
-    print(f'AL {year} standings at 60 games')
+    print(f'AL {year} standings')
+    print('-'*60)
+
     # Only 1 wildcard team up until 2011
     if year <= 2011:
-        # AL Divisions for particular year
-        al_divisions_at_sixty = [x for x in all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
-                    ascending=[True, False, True]).groupby('division').head(1)['division'] if x[0:2] == "AL"]
         # AL Division leaders at 60 game mark
         al_sixty_best = list(all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
                 ascending=[True, False, True]).groupby('division').head(1).loc[all_info.loc[year].
                              sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
-                ascending=[True, False, True]).groupby('division').head(1).division.isin(al_divisions_at_sixty), 'full_team'])
+                ascending=[True, False, True]).groupby('division').head(1).division.isin(al_divisions), 'full_team'])
         # AL Wild Card winning percentage at 60 games
-        al_wild_card_at_sixty_winning_percentage = list(all_info.loc[(year,)].query("(division in @al_divisions_at_sixty) &"
+        al_wild_card_at_sixty_winning_percentage = list(all_info.loc[(year,)].query("(division in @al_divisions) &"
                                     " (full_team not in @al_sixty_best)").sort_values(by='sixty_game_win_percentage',
                                     ascending=False).head(1)['sixty_game_win_percentage'])
         # Print AL standings at 60 game mark
-        print(all_info.loc[(year,)].query("full_team in @al_sixty_best").sort_values(by='division').
-              append(all_info.loc[(year,)].query("(division in @al_divisions_at_sixty) & (full_team not in @al_sixty_best) &"
-                                                 " (sixty_game_win_percentage in @al_wild_card_at_sixty_winning_percentage)")))
+        print('60 game standings:')
+        al_standings_sixty_game_mark = all_info.loc[(year,)].query("full_team in @al_sixty_best").sort_values(by='division').\
+            append(all_info.loc[(year,)].query("(division in @al_divisions) & (full_team not in @al_sixty_best) &"
+                                                 " (sixty_game_win_percentage in @al_wild_card_at_sixty_winning_percentage)"))
+        print(al_standings_sixty_game_mark)
+        al_teams_in_playoff_contention_sixty_game_wins_win_percentage[year] = \
+            [list(al_standings_sixty_game_mark['sixty_game_wins']),
+             list(al_standings_sixty_game_mark['sixty_game_win_percentage'])]
+
+        al_teams_in_division_lead_sixty_game_wins_win_percentage[year] = \
+            [list(al_standings_sixty_game_mark['sixty_game_wins'][:len(al_divisions)]),
+             list(al_standings_sixty_game_mark['sixty_game_win_percentage'][:len(al_divisions)])]
+
+        al_teams_in_wild_card_contention_sixty_game_wins_win_percentage[year] = \
+            [list(al_standings_sixty_game_mark['sixty_game_wins'][len(al_divisions):]),
+             list(al_standings_sixty_game_mark['sixty_game_win_percentage'][len(al_divisions):])]
 
         print('\n' * 1)
-        print(f'NL {year} standings at 60 games')
-        # NL Divisions for particular year
-        nl_divisions_at_sixty = [x for x in all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
-                    ascending=[True, False, True]).groupby('division').head(1)['division'] if x[0:2] == "NL"]
+        # Print AL final standings
+        print('Final standings:')
+        al_final_standings = all_info.loc[(year,)].query("(division in @al_divisions) &"
+                                " (season_result not in @none_values)").sort_values(by=['season_result',
+                                                                            'division'], ascending=[True, True])
+        print(al_final_standings)
+
+        al_teams_in_playoffs_sixty_game_wins_win_percentage_season_wins_win_percentage[year] =\
+            [list(al_final_standings['sixty_game_wins']), list(al_final_standings['sixty_game_win_percentage']),
+             list(al_final_standings['season_wins']), list(al_final_standings['season_winning_percentage'])]
+
+        al_teams_division_winners_sixty_game_wins_win_percentage_season_wins_win_percentage[year] = \
+            [list(al_final_standings['sixty_game_wins'][:len(al_divisions)]),
+             list(al_final_standings['sixty_game_win_percentage'][:len(al_divisions)]),
+             list(al_final_standings['season_wins'][:len(al_divisions)]),
+             list(al_final_standings['season_winning_percentage'][:len(al_divisions)])]
+
+        al_teams_wild_card_winners_sixty_game_wins_win_percentage_season_wins_win_percentage[year] = \
+            [list(al_final_standings['sixty_game_wins'][len(al_divisions):]),
+             list(al_final_standings['sixty_game_win_percentage'][len(al_divisions):]),
+             list(al_final_standings['season_wins'][len(al_divisions):]),
+             list(al_final_standings['season_winning_percentage'][len(al_divisions):])]
+
+        al_contention_playoff_in_in_in_out_out_in[year] = len(al_standings_sixty_game_mark), len(al_final_standings),\
+                                set(al_standings_sixty_game_mark['full_team']) & set(al_final_standings['full_team']), \
+                                set(al_standings_sixty_game_mark['full_team']) - set(al_final_standings['full_team']), \
+                                set(al_final_standings['full_team']) - set(al_standings_sixty_game_mark['full_team'])
+
+        print('\n' * 1)
+        print(f'NL {year} standings')
+        print('-'*60)
         # NL Division leaders at 60 game mark
         nl_sixty_best = list(all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
                 ascending=[True, False, True]).groupby('division').head(1).loc[all_info.loc[year].
                              sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
-                ascending=[True, False, True]).groupby('division').head(1).division.isin(nl_divisions_at_sixty), 'full_team'])
+                ascending=[True, False, True]).groupby('division').head(1).division.isin(nl_divisions), 'full_team'])
         # NL Wild Card winning percentage at 60 games
-        nl_wild_card_at_sixty_winning_percentage = list(all_info.loc[(year,)].query("(division in @nl_divisions_at_sixty) &"
+        nl_wild_card_at_sixty_winning_percentage = list(all_info.loc[(year,)].query("(division in @nl_divisions) &"
                                      " (full_team not in @nl_sixty_best)").sort_values(by='sixty_game_win_percentage',
                                      ascending=False).head(1)['sixty_game_win_percentage'])
         # Print NL standings at 60 game mark
-        print(all_info.loc[(year,)].query("full_team in @nl_sixty_best").sort_values(by='division').
-              append(all_info.loc[(year,)].query("(division in @nl_divisions_at_sixty) & (full_team not in @nl_sixty_best) &"
-                                                 " (sixty_game_win_percentage in @nl_wild_card_at_sixty_winning_percentage)")))
+        print('60 game standings:')
+        nl_standings_sixty_game_mark = all_info.loc[(year,)].query("full_team in @nl_sixty_best").sort_values(by='division').\
+              append(all_info.loc[(year,)].query("(division in @nl_divisions) & (full_team not in @nl_sixty_best) &"
+                                                 " (sixty_game_win_percentage in @nl_wild_card_at_sixty_winning_percentage)"))
+        print(nl_standings_sixty_game_mark)
+
+        nl_teams_in_playoff_contention_sixty_game_wins_win_percentage[year] = \
+            [list(nl_standings_sixty_game_mark['sixty_game_wins']),
+             list(nl_standings_sixty_game_mark['sixty_game_win_percentage'])]
+
+        nl_teams_in_division_lead_sixty_game_wins_win_percentage[year] = \
+            [list(nl_standings_sixty_game_mark['sixty_game_wins'][:len(nl_divisions)]),
+             list(nl_standings_sixty_game_mark['sixty_game_win_percentage'][:len(nl_divisions)])]
+
+        nl_teams_in_wild_card_contention_sixty_game_wins_win_percentage[year] = \
+            [list(nl_standings_sixty_game_mark['sixty_game_wins'][len(nl_divisions):]),
+             list(nl_standings_sixty_game_mark['sixty_game_win_percentage'][len(nl_divisions):])]
+
+        print('\n' * 1)
+        # Print NL final standings
+        print('Final standings:')
+        nl_final_standings = all_info.loc[(year,)].query("(division in @nl_divisions) & (season_result not in @none_values)").\
+            sort_values(by=['season_result', 'division'], ascending=[True, True])
+        print(nl_final_standings)
+
+        nl_teams_in_playoffs_sixty_game_wins_win_percentage_season_wins_win_percentage[year] = \
+            [list(nl_final_standings['sixty_game_wins']), list(nl_final_standings['sixty_game_win_percentage']),
+             list(nl_final_standings['season_wins']), list(nl_final_standings['season_winning_percentage'])]
+
+        nl_teams_division_winners_sixty_game_wins_win_percentage_season_wins_win_percentage[year] = \
+            [list(nl_final_standings['sixty_game_wins'][:len(nl_divisions)]),
+             list(nl_final_standings['sixty_game_win_percentage'][:len(nl_divisions)]),
+             list(nl_final_standings['season_wins'][:len(nl_divisions)]),
+             list(nl_final_standings['season_winning_percentage'][:len(nl_divisions)])]
+
+        nl_teams_wild_card_winners_sixty_game_wins_win_percentage_season_wins_win_percentage[year] = \
+            [list(nl_final_standings['sixty_game_wins'][len(nl_divisions):]),
+             list(nl_final_standings['sixty_game_win_percentage'][len(nl_divisions):]),
+             list(nl_final_standings['season_wins'][len(nl_divisions):]),
+             list(nl_final_standings['season_winning_percentage'][len(nl_divisions):])]
+
+        nl_contention_playoff_in_in_in_out_out_in[year] = len(nl_standings_sixty_game_mark), len(nl_final_standings),\
+                                set(nl_standings_sixty_game_mark['full_team']) & set(nl_final_standings['full_team']), \
+                                set(nl_standings_sixty_game_mark['full_team']) - set(nl_final_standings['full_team']), \
+                                set(nl_final_standings['full_team']) - set(nl_standings_sixty_game_mark['full_team'])
+
         print('\n' * 2)
     # 2 wildcard teams after 2011
     else:
-        # AL Divisions for particular year
-        al_divisions_at_sixty = [x for x in all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
-                    ascending=[True, False, True]).groupby('division').head(1)['division'] if x[0:2] == "AL"]
         # AL Division leaders at 60 game mark
         al_sixty_best = list(all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
                 ascending=[True, False, True]).groupby('division').head(1).loc[all_info.loc[year].
                              sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
-                ascending=[True, False, True]).groupby('division').head(1).division.isin(al_divisions_at_sixty), 'full_team'])
+                ascending=[True, False, True]).groupby('division').head(1).division.isin(al_divisions), 'full_team'])
         # AL Wild Card winning percentage at 60 games
-        al_wild_card_at_sixty_winning_percentage = list(all_info.loc[(year,)].query("(division in @al_divisions_at_sixty) &"
+        al_wild_card_at_sixty_winning_percentage = list(all_info.loc[(year,)].query("(division in @al_divisions) &"
                                     " (full_team not in @al_sixty_best)").sort_values(by='sixty_game_win_percentage',
                                     ascending=False).head(2)['sixty_game_win_percentage'])
         # Print AL standings at 60 game mark
-        print(all_info.loc[(year,)].query("full_team in @al_sixty_best").sort_values(by='division').
-              append(all_info.loc[(year,)].query("(division in @al_divisions_at_sixty) & (full_team not in @al_sixty_best) &"
+        print('60 game standings:')
+        al_standings_sixty_game_mark = all_info.loc[(year,)].query("full_team in @al_sixty_best").sort_values(by='division').\
+              append(all_info.loc[(year,)].query("(division in @al_divisions) & (full_team not in @al_sixty_best) &"
                                         " (sixty_game_win_percentage in @al_wild_card_at_sixty_winning_percentage)").
-                                        sort_values(by='sixty_game_win_percentage', ascending=False)))
+                                        sort_values(by='sixty_game_win_percentage', ascending=False))
+        print(al_standings_sixty_game_mark)
+
+        al_teams_in_playoff_contention_sixty_game_wins_win_percentage[year] = \
+            [list(al_standings_sixty_game_mark['sixty_game_wins']),
+             list(al_standings_sixty_game_mark['sixty_game_win_percentage'])]
+
+        al_teams_in_division_lead_sixty_game_wins_win_percentage[year] = \
+            [list(al_standings_sixty_game_mark['sixty_game_wins'][:len(al_divisions)]),
+             list(al_standings_sixty_game_mark['sixty_game_win_percentage'][:len(al_divisions)])]
+
+        al_teams_in_wild_card_contention_sixty_game_wins_win_percentage[year] = \
+            [list(al_standings_sixty_game_mark['sixty_game_wins'][len(al_divisions):]),
+             list(al_standings_sixty_game_mark['sixty_game_win_percentage'][len(al_divisions):])]
 
         print('\n' * 1)
-        print(f'NL {year} standings at 60 games')
-        # NL Divisions for particular year
-        nl_divisions_at_sixty = [x for x in all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
-                    ascending=[True, False, True]).groupby('division').head(1)['division'] if x[0:2] == "NL"]
+        # Print AL final standings
+        print('Final standings:')
+        al_final_standings = all_info.loc[(year,)].query("(division in @al_divisions) & (season_result not in @none_values)").\
+            sort_values(by=['season_result', 'division'], ascending=[True, True])
+        print(al_final_standings)
+
+        al_teams_in_playoffs_sixty_game_wins_win_percentage_season_wins_win_percentage[year] = \
+            [list(al_final_standings['sixty_game_wins']), list(al_final_standings['sixty_game_win_percentage']),
+             list(al_final_standings['season_wins']), list(al_final_standings['season_winning_percentage'])]
+
+        al_teams_division_winners_sixty_game_wins_win_percentage_season_wins_win_percentage[year] = \
+            [list(al_final_standings['sixty_game_wins'][:len(al_divisions)]),
+             list(al_final_standings['sixty_game_win_percentage'][:len(al_divisions)]),
+             list(al_final_standings['season_wins'][:len(al_divisions)]),
+             list(al_final_standings['season_winning_percentage'][:len(al_divisions)])]
+
+        al_teams_wild_card_winners_sixty_game_wins_win_percentage_season_wins_win_percentage[year] = \
+            [list(al_final_standings['sixty_game_wins'][len(al_divisions):]),
+             list(al_final_standings['sixty_game_win_percentage'][len(al_divisions):]),
+             list(al_final_standings['season_wins'][len(al_divisions):]),
+             list(al_final_standings['season_winning_percentage'][len(al_divisions):])]
+
+        al_contention_playoff_in_in_in_out_out_in[year] = len(al_standings_sixty_game_mark), len(al_final_standings),\
+                                set(al_standings_sixty_game_mark['full_team']) & set(al_final_standings['full_team']), \
+                                set(al_standings_sixty_game_mark['full_team']) - set(al_final_standings['full_team']), \
+                                set(al_final_standings['full_team']) - set(al_standings_sixty_game_mark['full_team'])
+
+
+        print('\n' * 1)
+        print(f'NL {year} standings')
+        print('-'*60)
         # NL Division leaders at 60 game mark
         nl_sixty_best = list(all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
                 ascending=[True, False, True]).groupby('division').head(1).loc[all_info.loc[year].
                              sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
-                ascending=[True, False, True]).groupby('division').head(1).division.isin(nl_divisions_at_sixty), 'full_team'])
+                ascending=[True, False, True]).groupby('division').head(1).division.isin(nl_divisions), 'full_team'])
         # NL Wild Card winning percentage at 60 games
-        nl_wild_card_at_sixty_winning_percentage = list(all_info.loc[(year,)].query("(division in @nl_divisions_at_sixty) &"
+        nl_wild_card_at_sixty_winning_percentage = list(all_info.loc[(year,)].query("(division in @nl_divisions) &"
                                        " (full_team not in @nl_sixty_best)").sort_values(by='sixty_game_win_percentage',
                                        ascending=False).head(2)['sixty_game_win_percentage'])
-        # Print AL standings at 60 game mark
-        print(all_info.loc[(year,)].query("full_team in @nl_sixty_best").sort_values(by='division').
-              append(all_info.loc[(year,)].query("(division in @nl_divisions_at_sixty) & (full_team not in @nl_sixty_best) &"
+        # Print NL standings at 60 game mark
+        print('60 game standings:')
+        nl_standings_sixty_game_mark = all_info.loc[(year,)].query("full_team in @nl_sixty_best").sort_values(by='division').\
+              append(all_info.loc[(year,)].query("(division in @nl_divisions) & (full_team not in @nl_sixty_best) &"
                                                  " (sixty_game_win_percentage in @nl_wild_card_at_sixty_winning_percentage)").
-                                                 sort_values(by='sixty_game_win_percentage', ascending=False)))
+                                                 sort_values(by='sixty_game_win_percentage', ascending=False))
+        print(nl_standings_sixty_game_mark)
+
+        nl_teams_in_playoff_contention_sixty_game_wins_win_percentage[year] = \
+            [list(nl_standings_sixty_game_mark['sixty_game_wins']),
+             list(nl_standings_sixty_game_mark['sixty_game_win_percentage'])]
+
+        nl_teams_in_division_lead_sixty_game_wins_win_percentage[year] = \
+            [list(nl_standings_sixty_game_mark['sixty_game_wins'][:len(nl_divisions)]),
+             list(nl_standings_sixty_game_mark['sixty_game_win_percentage'][:len(nl_divisions)])]
+
+        nl_teams_in_wild_card_contention_sixty_game_wins_win_percentage[year] = \
+            [list(nl_standings_sixty_game_mark['sixty_game_wins'][len(nl_divisions):]),
+             list(nl_standings_sixty_game_mark['sixty_game_win_percentage'][len(nl_divisions):])]
+
+
+        print('\n' * 1)
+        # Print NL final standings
+        print('Final standings:')
+        nl_final_standings = all_info.loc[(year,)].query("(division in @nl_divisions) & (season_result not in @none_values)").\
+            sort_values(by=['season_result', 'division'], ascending=[True, True])
+        print(nl_final_standings)
+
+        nl_teams_in_playoffs_sixty_game_wins_win_percentage_season_wins_win_percentage[year] = \
+            [list(nl_final_standings['sixty_game_wins']), list(nl_final_standings['sixty_game_win_percentage']),
+             list(nl_final_standings['season_wins']), list(nl_final_standings['season_winning_percentage'])]
+
+        nl_teams_division_winners_sixty_game_wins_win_percentage_season_wins_win_percentage[year] = \
+            [list(nl_final_standings['sixty_game_wins'][:len(nl_divisions)]),
+             list(nl_final_standings['sixty_game_win_percentage'][:len(nl_divisions)]),
+             list(nl_final_standings['season_wins'][:len(nl_divisions)]),
+             list(nl_final_standings['season_winning_percentage'][:len(nl_divisions)])]
+
+        nl_teams_wild_card_winners_sixty_game_wins_win_percentage_season_wins_win_percentage[year] = \
+            [list(nl_final_standings['sixty_game_wins'][len(nl_divisions):]),
+             list(nl_final_standings['sixty_game_win_percentage'][len(nl_divisions):]),
+             list(nl_final_standings['season_wins'][len(nl_divisions):]),
+             list(nl_final_standings['season_winning_percentage'][len(nl_divisions):])]
+
+        nl_contention_playoff_in_in_in_out_out_in[year] = len(nl_standings_sixty_game_mark), len(nl_final_standings),\
+                                set(nl_standings_sixty_game_mark['full_team']) & set(nl_final_standings['full_team']), \
+                                set(nl_standings_sixty_game_mark['full_team']) - set(nl_final_standings['full_team']), \
+                                set(nl_final_standings['full_team']) - set(nl_standings_sixty_game_mark['full_team'])
         print('\n' * 2)
+
+
+import matplotlib.pyplot as plt
+### Descriptive, statistical analysis, and visualizations ###
+
+# Set colors
+colors = {"american_league": "#EE0A46", "national_league": "#0E4082"}
+
+# Confirm keys (i.e. playoff years) in AL and NL dict are same
+if al_contention_playoff_in_in_in_out_out_in.keys() == nl_contention_playoff_in_in_in_out_out_in.keys():
+    playoff_years = nl_contention_playoff_in_in_in_out_out_in.keys()
+else:
+    print('AL and NL dicts do not have same playoff years. Need to check this out.')
+# Create DataFrame of percentage of teams that were in playoff contention at 60 games and made playoffs at end of year
+percentage_in_in_df = pd.DataFrame(data=[list(playoff_years),
+                          list(map(lambda playoff_years:  len(al_contention_playoff_in_in_in_out_out_in[playoff_years][2])/
+                            al_contention_playoff_in_in_in_out_out_in[playoff_years][1], playoff_years)),
+                          list(map(lambda playoff_years: len(nl_contention_playoff_in_in_in_out_out_in[playoff_years][2]) /
+                            nl_contention_playoff_in_in_in_out_out_in[playoff_years][1], playoff_years))]).T.set_index([0])
+# Use years for index
+percentage_in_in_df.index = pd.to_datetime(percentage_in_in_df.index.values.astype('int'), format='%Y').year
+# Set column names
+percentage_in_in_df = percentage_in_in_df.rename(columns={1:'american_league', 2:'national_league'})
+# Create DataFrame from wide to long
+percentage_in_in_df_melt = pd.melt(percentage_in_in_df)
+# Repeat index twice (AL and NL values have correct years)
+percentage_in_in_df_melt.index = list(percentage_in_in_df.index)*2
+## Plot of percentage of teams that were in playoff contention at 60 games and made playoffs at end of year
+fig, axes = plt.subplots(nrows=1, ncols=1)
+# fig.subplots_adjust(left=0.19, right=0.83, top=0.90, bottom=0.12, hspace=0.7, wspace = 0.25)
+sns.lineplot(y=percentage_in_in_df_melt.value, x=percentage_in_in_df_melt.index,
+             hue=percentage_in_in_df_melt.variable, palette=colors, style=percentage_in_in_df_melt.variable,
+             markers=True, dashes=False)
+
+# Swarmplot detailing each team's 60 game winning percentage and their season outcomes
+# Set colors
+swarmplot_colors = {"Did Make Playoffs": "#EE0A46", "Did Not Make Playoffs": "#0E4082"}
+
+# American League
+al_sixty_game_win_percentage_season_result = all_info.query("(division in @al_divisions)")[["season_result",
+                            "sixty_game_win_percentage"]].fillna("Did Not Make Playoffs")
+al_sixty_game_win_percentage_season_result['season_result'] = \
+    al_sixty_game_win_percentage_season_result['season_result'].replace("Wild Card Winner", "Did Make Playoffs").\
+                                                                replace("Division Winner", "Did Make Playoffs")
+fig, axes = plt.subplots(nrows=1, ncols=1)
+fig.subplots_adjust(left=0.05, right=0.95, top=0.90, bottom=0.12, hspace=0.7, wspace = 0.25)
+al_swarm_plot = sns.swarmplot(x= al_sixty_game_win_percentage_season_result.index.get_level_values(0),
+              y=al_sixty_game_win_percentage_season_result.sixty_game_win_percentage,
+              hue=al_sixty_game_win_percentage_season_result.season_result, palette=swarmplot_colors)
+# Verticl line between years to separate
+for xtick in al_swarm_plot.get_xticks()[:-1]:
+    plt.axvline(x=xtick + 0.5, ymin=0.05, ymax=0.95, color="#D3D3D3")
+
+# National League
+nl_sixty_game_win_percentage_season_result = all_info.query("(division in @nl_divisions)")[["season_result",
+                            "sixty_game_win_percentage"]].fillna("Did Not Make Playoffs")
+nl_sixty_game_win_percentage_season_result['season_result'] = \
+    nl_sixty_game_win_percentage_season_result['season_result'].replace("Wild Card Winner", "Did Make Playoffs").\
+                                                                replace("Division Winner", "Did Make Playoffs")
+fig, axes = plt.subplots(nrows=1, ncols=1)
+fig.subplots_adjust(left=0.05, right=0.95, top=0.90, bottom=0.12, hspace=0.7, wspace = 0.25)
+nl_swarm_plot = sns.swarmplot(x= nl_sixty_game_win_percentage_season_result.index.get_level_values(0),
+              y=nl_sixty_game_win_percentage_season_result.sixty_game_win_percentage,
+              hue=nl_sixty_game_win_percentage_season_result.season_result, palette=swarmplot_colors)
+# Verticl line between years to separate
+for xtick in nl_swarm_plot.get_xticks()[:-1]:
+    plt.axvline(x=xtick + 0.5, ymin=0.05, ymax=0.95, color="#D3D3D3")
+
+
+
+
+
+# T-test on two related samples - paired t-test for dependent groups
+# Question: Do teams "in the playoffs" at 60 games, on average, have a higher winning percentage at that point in the
+# season than the season ending winning percentage of teams that make the playoffs?
+# Null hypothesis: Equal average winning percentages
+
+# Sixty game winning percentage of all MLB "60 game playoff teams"
+mlb_teams_in_playoff_contention_sixty_game_win_percentage = []
+for year in al_teams_in_playoff_contention_sixty_game_wins_win_percentage.keys():
+    print(year)
+    if year <= 2011:
+        mlb_teams_in_playoff_contention_sixty_game_win_percentage.extend(
+            al_teams_in_playoff_contention_sixty_game_wins_win_percentage[year][1][:4])
+    else:
+        mlb_teams_in_playoff_contention_sixty_game_win_percentage.extend(
+            al_teams_in_playoff_contention_sixty_game_wins_win_percentage[year][1][:5])
+for year in nl_teams_in_playoff_contention_sixty_game_wins_win_percentage.keys():
+    print(year)
+    if year <= 2011:
+        mlb_teams_in_playoff_contention_sixty_game_win_percentage.extend(
+            nl_teams_in_playoff_contention_sixty_game_wins_win_percentage[year][1][:4])
+    else:
+        mlb_teams_in_playoff_contention_sixty_game_win_percentage.extend(
+            nl_teams_in_playoff_contention_sixty_game_wins_win_percentage[year][1][:5])
+
+# Final winning percentage of all MLB playoff teams
+mlb_teams_in_playoffs_sixty_game_win_percentage = list(chain(*[values[-1] for keys, values in
+        al_teams_in_playoffs_sixty_game_wins_win_percentage_season_wins_win_percentage.items()])) + \
+        list(chain(*[values[-1] for keys, values in nl_teams_in_playoffs_sixty_game_wins_win_percentage_season_wins_win_percentage.items()]))
+
+print(len(mlb_teams_in_playoff_contention_sixty_game_win_percentage) == len(mlb_teams_in_playoffs_sixty_game_win_percentage))
+
+
+# Determine 'strong' alpha value based on sample size (AA 501, 3 - More Complex ANOVA Regression)
+sample_size_one, strong_alpha_value_one = 100, 0.001
+sample_size_two, strong_alpha_value_two = 1000, 0.0003
+slope = (strong_alpha_value_two - strong_alpha_value_one)/(sample_size_two - sample_size_one)
+strong_alpha_value = slope * (len(mlb_teams_in_playoff_contention_sixty_game_win_percentage) - sample_size_one) + strong_alpha_value_one
+print(f"The alpha value for use in hypothesis tests is {strong_alpha_value}.")
+
+# Differences between two groups
+win_percentage_differences = [i - j for i, j in zip(mlb_teams_in_playoff_contention_sixty_game_win_percentage,
+                                                    mlb_teams_in_playoffs_sixty_game_win_percentage)]
+
+# Check for normality
+# Histogram with KDE overlaid
+sns.distplot(a = win_percentage_differences)
+plt.figure()
+# Boxplot
+sns.boxplot(x = win_percentage_differences)
+# Skewness and kurtosis
+stats.describe(win_percentage_differences)
+
+# Test for normality
+stats.normaltest(a = win_percentage_differences)[1] < strong_alpha_value
+stats.shapiro(x = win_percentage_differences)[1] < strong_alpha_value
+stats.anderson(x = win_percentage_differences, dist='norm')
+
+stats.ttest_rel(a=mlb_teams_in_playoff_contention_sixty_game_win_percentage,
+          b=mlb_teams_in_playoffs_sixty_game_win_percentage)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+box = plt.boxplot(x = mlb_teams_in_playoff_contention_sixty_game_win_percentage)
+
+for outlier in box['fliers'][0].get_ydata():
+    if outlier in mlb_teams_in_playoff_contention_sixty_game_win_percentage:
+        mlb_teams_in_playoff_contention_sixty_game_win_percentage.remove(outlier)
+
+sample_size_one, strong_alpha_value_one = 100, 0.001
+sample_size_two, strong_alpha_value_two = 1000, 0.0003
+slope = (strong_alpha_value_two - strong_alpha_value_one)/(sample_size_two - sample_size_one)
+strong_alpha_value = slope * (len(mlb_teams_in_playoff_contention_sixty_game_win_percentage) - sample_size_one) + strong_alpha_value_one
+print(f"The alpha value for use in hypothesis tests is {strong_alpha_value}.")
+
+sns.distplot(a = mlb_teams_in_playoff_contention_sixty_game_win_percentage)
+plt.figure()
+sns.boxplot(x = mlb_teams_in_playoff_contention_sixty_game_win_percentage)
+
+
+
+
+
+
+
+
+plt.figure()
+sns.distplot(a = mlb_teams_in_playoffs_sixty_game_win_percentage)
+plt.figure()
+sns.boxplot(x = mlb_teams_in_playoffs_sixty_game_win_percentage)
+
+# Determine 'strong' alpha value based on sample size (AA 501, 3 - More Complex ANOVA Regression)
+sample_size_one, strong_alpha_value_one = 100, 0.001
+sample_size_two, strong_alpha_value_two = 1000, 0.0003
+slope = (strong_alpha_value_two - strong_alpha_value_one)/(sample_size_two - sample_size_one)
+strong_alpha_value = slope * (len(mlb_teams_in_playoffs_sixty_game_win_percentage) - sample_size_one) + strong_alpha_value_one
+print(f"The alpha value for use in hypothesis tests is {strong_alpha_value}.")
+
+normaltest(a = mlb_teams_in_playoffs_sixty_game_win_percentage)[1] < strong_alpha_value
+shapiro(x = mlb_teams_in_playoffs_sixty_game_win_percentage)
+
+box = plt.boxplot(x = mlb_teams_in_playoffs_sixty_game_win_percentage)
+
+for outlier in box['fliers'][0].get_ydata():
+    if outlier in mlb_teams_in_playoffs_sixty_game_win_percentage:
+        mlb_teams_in_playoffs_sixty_game_win_percentage.remove(outlier)
+
+plt.figure()
+sns.distplot(a = mlb_teams_in_playoffs_sixty_game_win_percentage)
+plt.figure()
+sns.boxplot(x = mlb_teams_in_playoffs_sixty_game_win_percentage)
+
+# Determine 'strong' alpha value based on sample size (AA 501, 3 - More Complex ANOVA Regression)
+sample_size_one, strong_alpha_value_one = 100, 0.001
+sample_size_two, strong_alpha_value_two = 1000, 0.0003
+slope = (strong_alpha_value_two - strong_alpha_value_one)/(sample_size_two - sample_size_one)
+strong_alpha_value = slope * (len(mlb_teams_in_playoffs_sixty_game_win_percentage) - sample_size_one) + strong_alpha_value_one
+print(f"The alpha value for use in hypothesis tests is {strong_alpha_value}.")
+
+normaltest(a = mlb_teams_in_playoffs_sixty_game_win_percentage)[1] < strong_alpha_value
+
+
+
+sns.distplot(a = list(chain(*[values[1] for keys, values in
+                                        al_teams_in_playoff_contention_sixty_game_wins_win_percentage.items()])))
+
+sns.distplot(a = list(chain(*[values[0] for keys, values in
+                                        al_teams_in_division_lead_sixty_game_wins_win_percentage.items()])))
+
+sns.distplot(a = list(chain(*[values[0] for keys, values in
+                                        al_teams_in_wild_card_contention_sixty_game_wins_win_percentage.items()])))
+
+sns.scatterplot(x = list(chain(*[values[0] for keys, values in
+                                        al_teams_in_division_lead_sixty_game_wins_win_percentage.items()])),
+                y = list(chain(*[values[0] for keys, values in
+                                        nl_teams_in_division_lead_sixty_game_wins_win_percentage.items()])))
+
+sns.distplot(a = list(chain(*[values[0] for keys, values in
+                                        nl_teams_in_playoff_contention_sixty_game_wins_win_percentage.items()])))
+
+al_in_in_teams = []
+for year in al_contention_playoff_in_in_in_out_out_in.keys():
+    for team in al_contention_playoff_in_in_in_out_out_in[year][2]:
+        al_in_in_teams.extend([team])
+print(Counter(al_in_in_teams).most_common())
+
+nl_in_in_teams = []
+for year in nl_contention_playoff_in_in_in_out_out_in.keys():
+    for team in nl_contention_playoff_in_in_in_out_out_in[year][2]:
+        nl_in_in_teams.extend([team])
+print(Counter(nl_in_in_teams).most_common())
