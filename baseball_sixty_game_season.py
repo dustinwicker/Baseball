@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import time
 import os
 import re
@@ -6,6 +7,9 @@ import pickle
 import yaml
 import seaborn as sns
 from scipy import stats
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick
+from matplotlib import colors
 from calendar import monthrange
 from selenium import webdriver
 from collections import Counter
@@ -40,9 +44,9 @@ driver = webdriver.Chrome(options=options)
 # Define url
 url = "https://www.mlb.com/standings/wild-card"
 
+# Retreive season ending standings for playoff teams
 season_ending_list = []
 for year in range(1994, 2020):
-    # Define Chrome webdriver for site
     print(year)
     driver.get(url=url+f'/{year}')
     print(driver.current_url)
@@ -56,22 +60,14 @@ for year in range(1994, 2020):
                                                            "initiated g5-component--mlb g5-component--is-en g5-"
                                                            "component--is-visible']")
     standings_info = standings_info.text.split('\n')
-    al_divison_moniker = standings_info[0]
+    al_division_moniker = standings_info[0]
     al_wild_card_moniker = list(set([x for x in standings_info if 'al wild card' in x.lower()]))[0]
-    nl_divison_moniker = al_divison_moniker.replace('AL', 'NL')
+    nl_division_moniker = al_division_moniker.replace('AL', 'NL')
     nl_wild_card_moniker = al_wild_card_moniker.replace('AL', 'NL')
 
-    # AL Divison Winners
-    # print(standings_info[[i for i, x in enumerate(standings_info) if x == '>.500'][0]+1: [i for i, x in
-    #     enumerate(standings_info) if x == al_divison_moniker][1]])
     season_ending_list.append(standings_info[[i for i, x in enumerate(standings_info) if x == '>.500'][0]+1: [i for i, x in
-        enumerate(standings_info) if x == al_divison_moniker][1]])
+        enumerate(standings_info) if x == al_division_moniker][1]])
 
-    # AL Wild Card Winner(s)
-    # print(standings_info[[x for x in [i for i, x in enumerate(standings_info) if x == '>.500'] if x > [i for i, x in
-    #     enumerate(standings_info) if x == al_wild_card_moniker][0]][0]+1: [x for x in [i for i, x in
-    #     enumerate(standings_info) if x == '>.500'] if x > [i for i, x in
-    #     enumerate(standings_info) if x == al_wild_card_moniker][0]][0]+4])
     if year <= 2011:
         season_ending_list.append(standings_info[[x for x in [i for i, x in enumerate(standings_info) if x == '>.500'] if x > [i for i, x in
             enumerate(standings_info) if x == al_wild_card_moniker][0]][0]+1: [x for x in [i for i, x in
@@ -83,19 +79,10 @@ for year in range(1994, 2020):
             enumerate(standings_info) if x == '>.500'] if x > [i for i, x in
             enumerate(standings_info) if x == al_wild_card_moniker][0]][0]+7])
 
-    # NL Divison Winners
-    # print(standings_info[[x for x in [i for i, x in enumerate(standings_info) if x == '>.500'] if x > [i for i, x in
-    #     enumerate(standings_info) if x == nl_divison_moniker][0]][0]+1:[i for i, x in enumerate(standings_info) if
-    #     x == nl_divison_moniker][1]])
     season_ending_list.append(standings_info[[x for x in [i for i, x in enumerate(standings_info) if x == '>.500'] if x > [i for i, x in
-        enumerate(standings_info) if x == nl_divison_moniker][0]][0]+1:[i for i, x in enumerate(standings_info) if
-        x == nl_divison_moniker][1]])
+        enumerate(standings_info) if x == nl_division_moniker][0]][0]+1:[i for i, x in enumerate(standings_info) if
+        x == nl_division_moniker][1]])
 
-    # NL Wild Card Winner(s)
-    # print(standings_info[[x for x in [i for i, x in enumerate(standings_info) if x == '>.500'] if x > [i for i, x in
-    #     enumerate(standings_info) if x == nl_wild_card_moniker][0]][0]+1: [x for x in [i for i, x in
-    #     enumerate(standings_info) if x == '>.500'] if x > [i for i, x in
-    #     enumerate(standings_info) if x == nl_wild_card_moniker][0]][0]+4])
     if year <= 2011:
         season_ending_list.append(standings_info[[x for x in [i for i, x in enumerate(standings_info) if x == '>.500'] if x > [i for i, x in
             enumerate(standings_info) if x == nl_wild_card_moniker][0]][0]+1: [x for x in [i for i, x in
@@ -107,9 +94,9 @@ for year in range(1994, 2020):
             enumerate(standings_info) if x == '>.500'] if x > [i for i, x in
             enumerate(standings_info) if x == nl_wild_card_moniker][0]][0]+7])
 
-# # Save season ending standings
-# with open("season_ending_list.txt", "wb") as season_ending_list_txt:
-#     pickle.dump(season_ending_list, season_ending_list_txt)
+# Save season ending standings
+with open("season_ending_list.txt", "wb") as season_ending_list_txt:
+    pickle.dump(season_ending_list, season_ending_list_txt)
 
 # Retrieve standings at 60 game mark
 # Webdriver options
@@ -125,18 +112,17 @@ url = "https://www.mlb.com/standings"
 june = 6
 # Define months
 month = [6, 7]
+
 # Define dictionary that will capture teams that make up each division for each year
-divisons_by_year_teams = {}
+divisions_by_year_teams = {}
 # Define dictionary that will capture full team name for each year
 teams_city_name = {}
-# Define dictionary to retrieve each team's record at 60 games
+# Define dictionary to retrieve each team's record at 60 games for each year
 sixty_game_record = {}
 seconds_sleep_short, seconds_sleep_long = 5, 20
 
 for year in range(1994, 2020):
-    print('f')
     for month, day in product([6, 7], range(1, monthrange(year, june)[1] + 1)):
-        print('e')
         if len(str(day)) == 1:
             day = str(day).zfill(2)
         print('\n'*2)
@@ -200,24 +186,24 @@ for year in range(1994, 2020):
             print('Standings_info retrieved from site after refresh.')
 
         # Make dictionary of teams that make up each division for each year
-        if year not in divisons_by_year_teams.keys():
-            print(f'{year} not in divisons_by_year_teams.')
+        if year not in divisions_by_year_teams.keys():
+            print(f'{year} not in divisions_by_year_teams.')
             team_index_locator = []
             for value in unique_everseen([i for i in standings_info if "AL " in i or "NL " in i or "W Wins" in i]):
                 team_index_locator.extend([i for i, x in enumerate(standings_info) if x == value])
             team_index_locator = team_index_locator[1:]
-            divisons_by_teams = []
+            divisions_by_teams = []
             for i, j in zip(team_index_locator[0::2], team_index_locator[1::2]):
-                divisons_by_teams.append(standings_info[i:j])
+                divisions_by_teams.append(standings_info[i:j])
 
-            divisons_by_year_teams[year] = divisons_by_teams
-            print(f'{year} is now in divisons_by_year_teams.')
+            divisions_by_year_teams[year] = divisions_by_teams
+            print(f'{year} is now in divisions_by_year_teams.')
 
             team_counter = 0
             team_list = []
-            for i in range(len(divisons_by_year_teams[year])):
-                team_counter += len(divisons_by_year_teams[year][i][1:])
-                team_list.extend(divisons_by_year_teams[year][i][1:])
+            for i in range(len(divisions_by_year_teams[year])):
+                team_counter += len(divisions_by_year_teams[year][i][1:])
+                team_list.extend(divisions_by_year_teams[year][i][1:])
 
             if team_counter != len([[standings_info[i - 1], standings_info[i]] for i, v in
                                     enumerate(standings_info) if re.match(r'\w{1,2}\s{1}\w{1,2}\s{1}\.\w{3}', v)]):
@@ -300,7 +286,6 @@ for year in range(1994, 2020):
                 # for month, day in product([6, 7], range(1, monthrange(year, june)[1] + 1)):
                 for month, day in zip(pd.date_range(start="5/24/" + str(year), end="7/31/" + str(year)).month,
                                       pd.date_range(start="5/24/" + str(year), end="7/31/" + str(year)).day):
-                    print('d')
                     if set(team_list) == set(sixty_game_record[year][0::2]):
                         break
                     if len(str(day)) == 1:
@@ -455,24 +440,70 @@ for year in range(1994, 2020):
             print(f'Have full set of teams for {year} season.')
             break
 
-# # Save divisons by years with teams
-# with open("divisons_by_year_teams.txt", "wb") as divisons_by_year_teams_txt:
-#     pickle.dump(divisons_by_year_teams, divisons_by_year_teams_txt)
-#
-# # Save teams with their full city and names
-# with open("teams_city_name.txt", "wb") as teams_city_name_txt:
-#     pickle.dump(teams_city_name, teams_city_name_txt)
-#
-# # Save 60 game records
-# with open("sixty_game_record.txt", "wb") as sixty_game_record_txt:
-#     pickle.dump(sixty_game_record, sixty_game_record_txt)
+# Save divisions by years with teams
+with open("divisions_by_year_teams.txt", "wb") as divisions_by_year_teams_txt:
+    pickle.dump(divisions_by_year_teams, divisions_by_year_teams_txt)
+
+# Save teams with their full city and names
+with open("teams_city_name.txt", "wb") as teams_city_name_txt:
+    pickle.dump(teams_city_name, teams_city_name_txt)
+
+# Save 60 game records
+with open("sixty_game_record.txt", "wb") as sixty_game_record_txt:
+    pickle.dump(sixty_game_record, sixty_game_record_txt)
 
 
+# Retrieve World Series champions for years of analysis
+# Webdriver options
+options = Options()
+# options.add_argument('--headless')
+# Define Chrome webdriver for site
+driver = webdriver.Chrome(options=options)
+# Define url
+url = "https://en.wikipedia.org/wiki/List_of_World_Series_champions"
+# Go to URL
+driver.get(url)
+# Retrieve data
+try:
+    world_series_element = wait(driver, 120).until(EC.presence_of_element_located((By.XPATH,
+                                                    "//div[@class='mw-parser-output']"
+                                                    "//table[@class='wikitable sortable plainrowheaders "
+                                                    "jquery-tablesorter']")))
+    world_series_info = driver.find_element(By.XPATH, value="//div[@class='mw-parser-output']//"
+                                                       "table[@class='wikitable sortable plainrowheaders "
+                                                       "jquery-tablesorter']")
+    driver.close()
+except (NoSuchElementException, TimeoutException):
+    print('Error here.')
+
+# Split on new line
+world_series_info = world_series_info.text.split('\n')
+# world_series_info.text.split('\n')[0:1] ['Year Winning team Manager Games Losing team Manager Ref.']
+
+# Remove years before 1995
+world_series_info = world_series_info[[index for index, value in enumerate(world_series_info) if '1994' in value[0:4]][0]+1:]
+
+# Retrieve year, world series winner, and world series loser
+world_series_winner_loser = {}
+for i in range(len(world_series_info)):
+    world_series_winner_loser[int(world_series_info[i][0:4])] = \
+        [world_series_info[i][world_series_info[i].index(" "):[index for index, value in
+            enumerate(world_series_info[i]) if value == "("][0]].strip(),
+        world_series_info[i][world_series_info[i].index(re.findall(r"\d{1}–\d{1}",
+            world_series_info[i])[1])+3:[index for index, value in enumerate(world_series_info[i]) if value == "("][1]].strip()]
+
+# Clean up values
+for year in world_series_winner_loser.keys():
+    for index, team in enumerate(world_series_winner_loser[year]):
+        if '[' in team:
+            world_series_winner_loser[year][index] = world_series_winner_loser[year][index].split('[')[0]
+
+# Save world series info
+with open("world_series_winner_loser.txt", "wb") as world_series_winner_loser_txt:
+    pickle.dump(world_series_winner_loser, world_series_winner_loser_txt)
 
 
-
-
-
+### Begin data cleanup and exploration
 # Load in 60 game records
 with open("sixty_game_record.txt", "rb") as handle:
     sixty_game_record = pickle.load(handle)
@@ -481,9 +512,9 @@ with open("sixty_game_record.txt", "rb") as handle:
 with open("season_ending_list.txt", "rb") as handle:
     season_ending_list = pickle.load(handle)
 
-# Load in divisons_by_year_teams
-with open("divisons_by_year_teams.txt", "rb") as handle:
-    divisons_by_year_teams = pickle.load(handle)
+# Load in divisions_by_year_teams
+with open("divisions_by_year_teams.txt", "rb") as handle:
+    divisions_by_year_teams = pickle.load(handle)
 
 # Load in teams_city_name
 with open("teams_city_name.txt", "rb") as handle:
@@ -511,18 +542,18 @@ for year in sixty_game_record.keys():
 #         if len(i) != 5:
 #             print(i)
 
-# Add divison each team played in for that year
+# Add division each team played in for that year
 for year in sixty_game_record.keys():
     print(year)
     for index, team in enumerate(sixty_game_record[year]):
         print('\n')
         print(team)
-        for divisons in divisons_by_year_teams[year]:
-            print(divisons)
-            for divison in divisons:
-                if team[0] in divison:
-                    print(index, team[0], divisons[0])
-                    sixty_game_record[year][index] = sixty_game_record[year][index] + [divisons[0]]
+        for divisions in divisions_by_year_teams[year]:
+            print(divisions)
+            for division in divisions:
+                if team[0] in division:
+                    print(index, team[0], divisions[0])
+                    sixty_game_record[year][index] = sixty_game_record[year][index] + [divisions[0]]
                     break
 
 
@@ -543,6 +574,7 @@ for year, season_result in zip(range(1994, 2020),
                                [season_ending_list[i:i + 4] for i in range(0, len(season_ending_list), 4)]):
     season_ending_dict[year] = season_result
 
+# Add division winner and wild card teams for each year
 for year in sixty_game_record.keys():
     print('\n')
     print(year)
@@ -554,7 +586,7 @@ for year in sixty_game_record.keys():
                     sixty_game_record[year][team_index] = sixty_game_record[year][team_index] + [
                         result[result.index(team[0]):result.index(team[0]) + 2][1], 'Division Winner']
                     print(year, team[0], index, result, result[result.index(team[0]):result.index(team[0]) + 2][1])
-                    print('Divison Winner')
+                    print('Division Winner')
                     print(team_index)
                 elif result_index in [1, 3]:
                     sixty_game_record[year][team_index] = sixty_game_record[year][team_index] + [
@@ -593,6 +625,20 @@ for year in sixty_game_record.keys():
                 print(team[0], full_team_name)
                 sixty_game_record[year][index] = sixty_game_record[year][index] + [full_team_name]
 
+# Update season result with world series outcome
+for year in sixty_game_record.keys():
+    try:
+        print('\n')
+        print(year)
+        for index, team in enumerate(sixty_game_record[year]):
+            if team[-1] == world_series_winner_loser[year][0]:
+                sixty_game_record[year][index][-5] = 'World Series Winner'
+            elif team[-1] == world_series_winner_loser[year][1]:
+                sixty_game_record[year][index][-5] = 'World Series Loser'
+    except KeyError:
+        pass
+
+
 # Create DataFrame of combined results
 all_info = pd.concat({key: pd.DataFrame(value) for key, value in sixty_game_record.items()}, axis=0)
 
@@ -621,10 +667,6 @@ all_info.loc[all_info.sixty_game_win_percentage.isnull(), 'sixty_game_win_percen
 
 # Drop the 1994 year - strike shortened season
 all_info = all_info.drop(1994)
-
-
-# Fill None values
-# all_info.fillna("-")
 
 # Sort Dataframe
 # all_info = all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
@@ -917,18 +959,80 @@ for year in all_info.index.get_level_values(0).unique():
                                 set(nl_final_standings['full_team']) - set(nl_standings_sixty_game_mark['full_team'])
         print('\n' * 2)
 
+al_teams_expanded_playoffs_actual_playoff_teams_actual_division_actual_wild_card = {}
+nl_teams_expanded_playoffs_actual_playoff_teams_actual_division_actual_wild_card = {}
 
-import matplotlib.pyplot as plt
+# Account for 2020 playoff modification - 1st and 2nd place teams in each division plus two wild card teams from
+# each league will make playoffs
+for year in all_info.index.get_level_values(0).unique():
+    print('*'*100)
+    print(f'Year: {year}')
+    print(all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
+                                         ascending=[True, False, True]))
+    print('\n' * 1)
+    print(f'AL {year} standings')
+    print('-'*60)
+    # AL Division leaders at 60 game mark
+    al_sixty_best_corona = list(all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
+                                ascending=[True, False, True]).groupby('division').head(2).loc[all_info.loc[year].
+                                sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
+                                     ascending=[True, False, True]).groupby('division').head(2).division.isin(
+                                 al_divisions), 'full_team'])
+    # AL Wild Card winning percentage at 60 games
+    al_wild_card_at_sixty_winning_percentage_corona = list(all_info.loc[(year,)].query("(division in @al_divisions) &"
+                                " (full_team not in @al_sixty_best_corona)").sort_values(by='sixty_game_win_percentage',
+                                ascending=False).head(2)['sixty_game_win_percentage'])
+    # Print AL standings at 60 game mark
+    print('60 game standings:')
+    al_standings_sixty_game_mark_corona = all_info.loc[(year,)].query("full_team in @al_sixty_best_corona").\
+        sort_values(by=['division', 'sixty_game_win_percentage'], ascending=[True, False]). \
+        append(all_info.loc[(year,)].query("(division in @al_divisions) & (full_team not in @al_sixty_best_corona) &"
+                                           " (sixty_game_win_percentage in @al_wild_card_at_sixty_winning_percentage_corona)").
+               sort_values(by='sixty_game_win_percentage', ascending=False))
+    print(al_standings_sixty_game_mark_corona)
+
+    print('\n' * 1)
+    print(f'NL {year} standings')
+    print('-'*60)
+    # NL Division leaders at 60 game mark
+    nl_sixty_best_corona = list(all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
+            ascending=[True, False, True]).groupby('division').head(2).loc[all_info.loc[year].
+                         sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
+            ascending=[True, False, True]).groupby('division').head(2).division.isin(nl_divisions), 'full_team'])
+    # NL Wild Card winning percentage at 60 games
+    nl_wild_card_at_sixty_winning_percentage_corona = list(all_info.loc[(year,)].query("(division in @nl_divisions) &"
+                                   " (full_team not in @nl_sixty_best_corona)").sort_values(by='sixty_game_win_percentage',
+                                   ascending=False).head(2)['sixty_game_win_percentage'])
+    # Print NL standings at 60 game mark
+    print('60 game standings:')
+    nl_standings_sixty_game_mark_corona = all_info.loc[(year,)].query("full_team in @nl_sixty_best_corona").\
+        sort_values(by=['division', 'sixty_game_win_percentage'], ascending=[True, False]).\
+          append(all_info.loc[(year,)].query("(division in @nl_divisions) & (full_team not in @nl_sixty_best_corona) &"
+                                             " (sixty_game_win_percentage in @nl_wild_card_at_sixty_winning_percentage_corona)").
+                                             sort_values(by='sixty_game_win_percentage', ascending=False))
+    print(nl_standings_sixty_game_mark_corona)
+
+    al_teams_expanded_playoffs_actual_playoff_teams_actual_division_actual_wild_card[year] = \
+        (len(al_standings_sixty_game_mark_corona.loc[al_standings_sixty_game_mark_corona.season_result.notnull()]),
+        len(al_standings_sixty_game_mark_corona.loc[al_standings_sixty_game_mark_corona.season_result == "Division Winner"]),
+        len(al_standings_sixty_game_mark_corona.loc[al_standings_sixty_game_mark_corona.season_result == "Wild Card Winner"]))
+    nl_teams_expanded_playoffs_actual_playoff_teams_actual_division_actual_wild_card[year] = \
+        (len(nl_standings_sixty_game_mark_corona.loc[nl_standings_sixty_game_mark_corona.season_result.notnull()]),
+        len(nl_standings_sixty_game_mark_corona.loc[nl_standings_sixty_game_mark_corona.season_result == "Division Winner"]),
+        len(nl_standings_sixty_game_mark_corona.loc[nl_standings_sixty_game_mark_corona.season_result == "Wild Card Winner"]))
+
 ### Descriptive, statistical analysis, and visualizations ###
 
 # Set colors
-colors = {"american_league": "#EE0A46", "national_league": "#0E4082"}
+lineplot_colors = {"american_league": "#EE0A46", "national_league": "#0E4082"}
 
 # Confirm keys (i.e. playoff years) in AL and NL dict are same
 if al_contention_playoff_in_in_in_out_out_in.keys() == nl_contention_playoff_in_in_in_out_out_in.keys():
     playoff_years = nl_contention_playoff_in_in_in_out_out_in.keys()
 else:
     print('AL and NL dicts do not have same playoff years. Need to check this out.')
+
+# Traditional season
 # Create DataFrame of percentage of teams that were in playoff contention at 60 games and made playoffs at end of year
 percentage_in_in_df = pd.DataFrame(data=[list(playoff_years),
                           list(map(lambda playoff_years:  len(al_contention_playoff_in_in_in_out_out_in[playoff_years][2])/
@@ -943,38 +1047,134 @@ percentage_in_in_df = percentage_in_in_df.rename(columns={1:'american_league', 2
 percentage_in_in_df_melt = pd.melt(percentage_in_in_df)
 # Repeat index twice (AL and NL values have correct years)
 percentage_in_in_df_melt.index = list(percentage_in_in_df.index)*2
-## Plot of percentage of teams that were in playoff contention at 60 games and made playoffs at end of year
-fig, axes = plt.subplots(nrows=1, ncols=1)
+
+# Expanded playoff season analysis (i.e. what they are doing for the 2020 playoff season)
+# Create DataFrame of percentage of teams, at the 60-game mark, that were playoffs teams at seasons end with expanded format
+expanded_percentage_playoff_teams_captured_df = pd.DataFrame(data=[list(playoff_years),
+                          list(map(lambda playoff_years:
+                                   al_teams_expanded_playoffs_actual_playoff_teams_actual_division_actual_wild_card[playoff_years][0]/
+                            al_contention_playoff_in_in_in_out_out_in[playoff_years][1], playoff_years)),
+                          list(map(lambda playoff_years:
+                                   nl_teams_expanded_playoffs_actual_playoff_teams_actual_division_actual_wild_card[playoff_years][0]/
+                            nl_contention_playoff_in_in_in_out_out_in[playoff_years][1], playoff_years))]).T.set_index([0])
+# Use years for index
+expanded_percentage_playoff_teams_captured_df.index = \
+    pd.to_datetime(expanded_percentage_playoff_teams_captured_df.index.values.astype('int'), format='%Y').year
+# Set column names
+expanded_percentage_playoff_teams_captured_df = expanded_percentage_playoff_teams_captured_df.\
+    rename(columns={1:'american_league', 2:'national_league'})
+# Create DataFrame from wide to long
+expanded_percentage_playoff_teams_captured_df_melt = pd.melt(expanded_percentage_playoff_teams_captured_df)
+# Repeat index twice (AL and NL values have correct years)
+expanded_percentage_playoff_teams_captured_df_melt.index = list(expanded_percentage_playoff_teams_captured_df.index)*2
+
+## Plot of percentage of teams that were in playoff contention at 60 games and made playoffs at end of year -
+# Traditional and Expanded
+fig, axes = plt.subplots(nrows=1, ncols=2, sharey=True)
+# fig.subplots_adjust(left=0.05, right=.99, top=0.90, bottom=0.04)
+# fig.suptitle('Distributions with Kernel Density Estimation (KDE) Overlaid ', fontweight='bold', fontsize=26)
 # fig.subplots_adjust(left=0.19, right=0.83, top=0.90, bottom=0.12, hspace=0.7, wspace = 0.25)
-sns.lineplot(y=percentage_in_in_df_melt.value, x=percentage_in_in_df_melt.index,
-             hue=percentage_in_in_df_melt.variable, palette=colors, style=percentage_in_in_df_melt.variable,
-             markers=True, dashes=False)
+
+# Set common parameters for each plot
+line_width = 3
+marker_width = 10
+years = np.arange(min(percentage_in_in_df_melt.index), max(percentage_in_in_df_melt.index)+1, 1)
+rotation_angle = 45
+xtick_labels_fontsize = 22
+# ytick_labels_fontsize = 22
+subplot_title_fontsize = 22
+
+sns.lineplot(ax=axes[0], y=percentage_in_in_df_melt.value, x=percentage_in_in_df_melt.index,
+             hue=percentage_in_in_df_melt.variable, palette=lineplot_colors, style=percentage_in_in_df_melt.variable,
+             markers=True, dashes=False, linewidth=line_width, markersize=marker_width)
+# Set xticks to display each year
+axes[0].set_xticks(years)
+axes[0].set_xticklabels(labels=axes[0].get_xticks(), rotation=rotation_angle, fontdict ={'fontweight': 'bold',
+                                                                                         'fontsize': xtick_labels_fontsize})
+axes[0].set_ylabel("")
+axes[0].set_title("Traditional Playoff Format", fontdict ={'fontweight': 'bold', 'fontsize': subplot_title_fontsize})
+
+sns.lineplot(ax=axes[1], y=expanded_percentage_playoff_teams_captured_df_melt.value,
+             x=expanded_percentage_playoff_teams_captured_df_melt.index,
+             hue=expanded_percentage_playoff_teams_captured_df_melt.variable,
+             palette=lineplot_colors, style=expanded_percentage_playoff_teams_captured_df_melt.variable,
+             markers=True, dashes=False, linewidth=line_width, markersize=marker_width)
+axes[1].set_xticks(years)
+axes[1].set_xticklabels(labels=axes[0].get_xticks(), rotation=rotation_angle, fontdict ={'fontweight': 'bold',
+                                                                                         'fontsize': xtick_labels_fontsize})
+axes[1].set_title("Expanded Playoff Format", fontdict ={'fontweight': 'bold', 'fontsize': subplot_title_fontsize})
+fig.suptitle('Percentage of Teams in Playoff Position at Sixty-Game Mark and Made Playoffs at End of Year',
+             fontweight= 'bold', fontsize= 26)
+axes[0].set_yticklabels(labels=axes[0].get_yticks(), fontdict ={'fontweight': 'bold', 'fontsize': 22})
+axes[0].yaxis.set_major_formatter(mtick.PercentFormatter(1.0))
+axes[0].get_legend().remove()
+axes[1].get_legend().remove()
+handles, legends = axes[1].get_legend_handles_labels()
+legends_spelled_out_dict = {'variable': "Legend",'american_league': "American League", 'national_league': "National League"}
+fig.legend(handles, legends_spelled_out_dict.values(), loc='upper left', bbox_to_anchor=(0.77, 1.0),
+           prop={'weight': 'bold', 'size': 14})
+# handles, legends = axes[1].get_legend_handles_labels()
+# legends_spelled_out_dict = {'american_league': "American League", 'national_league': "National League"}
+# fig.legend(handles[1:], legends_spelled_out_dict.values(), loc='upper left', bbox_to_anchor=(0.77, 1.0),
+#            prop={'weight': 'bold', 'size': 14})
+
+# fig.text(0.5, 0.04, 'Year', ha='center')
+
+len(percentage_in_in_df.loc[(percentage_in_in_df.american_league==1.0) & (percentage_in_in_df.national_league==1.0)])
+len(percentage_in_in_df.loc[(percentage_in_in_df.american_league==1.0) & (percentage_in_in_df.national_league==1.0)])/len(percentage_in_in_df)
+percentage_in_in_df['american_league'].mean()
+percentage_in_in_df['national_league'].mean()
+
+
+
+
 
 # Swarmplot detailing each team's 60 game winning percentage and their season outcomes
 # Set colors
-swarmplot_colors = {"Did Make Playoffs": "#EE0A46", "Did Not Make Playoffs": "#0E4082"}
+swarmplot_colors = {"Did Make Playoffs": "#EE0A46", "World Series Winner": "#EE0A46", "Did Not Make Playoffs": "#0E4082",
+                    "vertical_line": "#D3D3D3"}
+# Tuple of season result values not to replace
+season_results_not_to_replace = ("World Series Winner", "Did Not Make Playoffs")
 
 # American League
 al_sixty_game_win_percentage_season_result = all_info.query("(division in @al_divisions)")[["season_result",
                             "sixty_game_win_percentage"]].fillna("Did Not Make Playoffs")
-al_sixty_game_win_percentage_season_result['season_result'] = \
-    al_sixty_game_win_percentage_season_result['season_result'].replace("Wild Card Winner", "Did Make Playoffs").\
-                                                                replace("Division Winner", "Did Make Playoffs")
+
+# Replace all season results that are not 'Did Not Make Playoffs' or 'World Series Winner'
+for value in [x for x in list(al_sixty_game_win_percentage_season_result['season_result'].unique())
+              if x not in season_results_not_to_replace]:
+    al_sixty_game_win_percentage_season_result['season_result'] = \
+        al_sixty_game_win_percentage_season_result['season_result'].replace(value, "Did Make Playoffs")
 fig, axes = plt.subplots(nrows=1, ncols=1)
-fig.subplots_adjust(left=0.05, right=0.95, top=0.90, bottom=0.12, hspace=0.7, wspace = 0.25)
-al_swarm_plot = sns.swarmplot(x= al_sixty_game_win_percentage_season_result.index.get_level_values(0),
+# fig.subplots_adjust(left=0.05, right=0.95, top=0.90, bottom=0.12, hspace=0.7, wspace = 0.25)
+sns.swarmplot(x= al_sixty_game_win_percentage_season_result.index.get_level_values(0),
               y=al_sixty_game_win_percentage_season_result.sixty_game_win_percentage,
               hue=al_sixty_game_win_percentage_season_result.season_result, palette=swarmplot_colors)
 # Verticl line between years to separate
-for xtick in al_swarm_plot.get_xticks()[:-1]:
-    plt.axvline(x=xtick + 0.5, ymin=0.05, ymax=0.95, color="#D3D3D3")
+for xtick in axes.get_xticks()[:-1]:
+    plt.axvline(x=xtick + 0.5, ymin=0.05, ymax=0.95, color=swarmplot_colors['vertical_line'])
+# Place stars on World Series winners
+for year_index, year in enumerate(al_sixty_game_win_percentage_season_result.index.get_level_values(0).unique()):
+    if 'World Series Winner' in al_sixty_game_win_percentage_season_result.loc[year]['season_result'].values:
+        for point_index, point in enumerate(axes.get_children()[year_index].get_offsets()):
+            if round(point[1],3) == round(al_sixty_game_win_percentage_season_result.loc[year].\
+                  query("season_result == 'World Series Winner'")['sixty_game_win_percentage'].values[0],3):
+                if colors.to_hex(axes.get_children()[year_index].get_facecolors()[point_index]).upper() == swarmplot_colors['World Series Winner']:
+                    axes.plot(point[0], al_sixty_game_win_percentage_season_result.loc[year].
+                              query("season_result == 'World Series Winner'")['sixty_game_win_percentage'].values[0],
+                              marker='*', markersize=12, color=swarmplot_colors["World Series Winner"])
+                    break
+
 
 # National League
 nl_sixty_game_win_percentage_season_result = all_info.query("(division in @nl_divisions)")[["season_result",
                             "sixty_game_win_percentage"]].fillna("Did Not Make Playoffs")
-nl_sixty_game_win_percentage_season_result['season_result'] = \
-    nl_sixty_game_win_percentage_season_result['season_result'].replace("Wild Card Winner", "Did Make Playoffs").\
-                                                                replace("Division Winner", "Did Make Playoffs")
+# Replace all season results that are not 'Did Not Make Playoffs' or 'World Series Winner'
+for value in [x for x in list(nl_sixty_game_win_percentage_season_result['season_result'].unique())
+              if x not in season_results_not_to_replace]:
+    nl_sixty_game_win_percentage_season_result['season_result'] = \
+        nl_sixty_game_win_percentage_season_result['season_result'].replace(value, "Did Make Playoffs")
+
 fig, axes = plt.subplots(nrows=1, ncols=1)
 fig.subplots_adjust(left=0.05, right=0.95, top=0.90, bottom=0.12, hspace=0.7, wspace = 0.25)
 nl_swarm_plot = sns.swarmplot(x= nl_sixty_game_win_percentage_season_result.index.get_level_values(0),
@@ -982,8 +1182,23 @@ nl_swarm_plot = sns.swarmplot(x= nl_sixty_game_win_percentage_season_result.inde
               hue=nl_sixty_game_win_percentage_season_result.season_result, palette=swarmplot_colors)
 # Verticl line between years to separate
 for xtick in nl_swarm_plot.get_xticks()[:-1]:
-    plt.axvline(x=xtick + 0.5, ymin=0.05, ymax=0.95, color="#D3D3D3")
-
+    plt.axvline(x=xtick + 0.5, ymin=0.05, ymax=0.95, color=swarmplot_colors['vertical_line'])
+# Place stars on World Series winners
+for year_index, year in enumerate(nl_sixty_game_win_percentage_season_result.index.get_level_values(0).unique()):
+    if 'World Series Winner' in nl_sixty_game_win_percentage_season_result.loc[year]['season_result'].values:
+        for point_index, point in enumerate(axes.get_children()[year_index].get_offsets()):
+            if round(point[1],3) == round(nl_sixty_game_win_percentage_season_result.loc[year].\
+                  query("season_result == 'World Series Winner'")['sixty_game_win_percentage'].values[0],3):
+                if colors.to_hex(axes.get_children()[year_index].get_facecolors()[point_index]).upper() == swarmplot_colors['World Series Winner']:
+                    world_series_marker = plt.plot(point[0], nl_sixty_game_win_percentage_season_result.loc[year].
+                              query("season_result == 'World Series Winner'")['sixty_game_win_percentage'].values[0],
+                              marker='*', markersize=12, color=swarmplot_colors["World Series Winner"], drawstyle=None)
+                    break
+world_series_marker[0].set_linestyle('None')
+handles, legends = axes.get_legend_handles_labels()
+handles[-1] = world_series_marker[0]
+fig.legend(handles, legends, loc='upper left', bbox_to_anchor=(0.77, 1.0),
+           prop={'weight': 'bold', 'size': 14})
 
 
 
@@ -1047,8 +1262,6 @@ stats.anderson(x = win_percentage_differences, dist='norm')
 
 stats.ttest_rel(a=mlb_teams_in_playoff_contention_sixty_game_win_percentage,
           b=mlb_teams_in_playoffs_sixty_game_win_percentage)
-
-
 
 
 
