@@ -9,6 +9,7 @@ import seaborn as sns
 from scipy import stats
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
+import matplotlib.transforms as mtrans
 from matplotlib import colors
 from calendar import monthrange
 from selenium import webdriver
@@ -31,9 +32,15 @@ pd.set_option('display.min_rows', 200)
 
 # Change current working directory to main directory
 def main_directory(directory):
-    # Load in .yml file to retrieve location of heart disease directory
-    info = yaml.load(open("info.yml"), Loader=yaml.FullLoader)
-    os.chdir(os.getcwd() + info[directory])
+    """Load in .yml file to retrieve location of current working directory"""
+    while True:
+        try:
+            info = yaml.load(open("info.yml"), Loader=yaml.FullLoader)
+            os.chdir(os.getcwd() + info[directory])
+        except FileNotFoundError:
+            os.chdir(os.path.expanduser("~") + "/Projects")
+            continue
+        break
 main_directory(directory="baseball_directory")
 
 # Webdriver options
@@ -520,6 +527,10 @@ with open("divisions_by_year_teams.txt", "rb") as handle:
 with open("teams_city_name.txt", "rb") as handle:
     teams_city_name = pickle.load(handle)
 
+# Load in world series info
+with open("world_series_winner_loser.txt", "rb") as handle:
+    world_series_winner_loser = pickle.load(handle)
+
 # Clean up results returned for each team
 for year in sixty_game_record.keys():
     sixty_game_record[year] = [re.match(r'\w{2}\s{1}\w{2}\s{1}\.\w{3}', i).group(0) if re.match(r'\w{2}\s{1}\w{2}\s{1}\.\w{3}', i)
@@ -667,6 +678,14 @@ all_info.loc[all_info.sixty_game_win_percentage.isnull(), 'sixty_game_win_percen
 
 # Drop the 1994 year - strike shortened season
 all_info = all_info.drop(1994)
+
+# Save MultiIndex DataFrame
+all_info.to_csv("all_info_multiindex_df.csv")
+
+# Load in CSV as MultiIndex DataFrame
+all_info = pd.read_csv("all_info_multiindex_df.csv", index_col=[0,1])
+# Fill NaN values with None
+all_info = all_info.where(all_info.notnull(), None)
 
 # Sort Dataframe
 # all_info = all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
@@ -1021,16 +1040,106 @@ for year in all_info.index.get_level_values(0).unique():
         len(nl_standings_sixty_game_mark_corona.loc[nl_standings_sixty_game_mark_corona.season_result == "Division Winner"]),
         len(nl_standings_sixty_game_mark_corona.loc[nl_standings_sixty_game_mark_corona.season_result == "Wild Card Winner"]))
 
-### Descriptive, statistical analysis, and visualizations ###
-
-# Set colors
-lineplot_colors = {"american_league": "#EE0A46", "national_league": "#0E4082"}
-
 # Confirm keys (i.e. playoff years) in AL and NL dict are same
 if al_contention_playoff_in_in_in_out_out_in.keys() == nl_contention_playoff_in_in_in_out_out_in.keys():
     playoff_years = nl_contention_playoff_in_in_in_out_out_in.keys()
 else:
     print('AL and NL dicts do not have same playoff years. Need to check this out.')
+
+al_teams_expanded_playoffs_theoretical = {}
+nl_teams_expanded_playoffs_theoretical = {}
+
+num_teams = [1,2,3,4]
+
+# Determine combinations of number of teams to take in each division and number of wild card teams to take in order to
+# accomplish 100% from AL and NL
+for year in all_info.index.get_level_values(0).unique():
+    for division_teams, wild_card_teams in product(num_teams, repeat=2):
+        print(f'Year: {year}')
+        # AL Division leaders at 60 game mark
+        al_sixty_best_theoretical = list(all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
+                                    ascending=[True, False, True]).groupby('division').head(division_teams).loc[all_info.loc[year].
+                                    sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
+                                         ascending=[True, False, True]).groupby('division').head(division_teams).division.isin(
+                                     al_divisions), 'full_team'])
+        # AL Wild Card winning percentage at 60 games
+        al_wild_card_at_sixty_winning_percentage_theoretical = list(all_info.loc[(year,)].query("(division in @al_divisions) &"
+                                    " (full_team not in @al_sixty_best_theoretical)").sort_values(by='sixty_game_win_percentage',
+                                    ascending=False).head(wild_card_teams)['sixty_game_win_percentage'])
+        al_standings_sixty_game_mark_theoretical = all_info.loc[(year,)].query("full_team in @al_sixty_best_theoretical").\
+            sort_values(by=['division', 'sixty_game_win_percentage'], ascending=[True, False]). \
+            append(all_info.loc[(year,)].query("(division in @al_divisions) & (full_team not in @al_sixty_best_theoretical) &"
+                                               " (sixty_game_win_percentage in @al_wild_card_at_sixty_winning_percentage_theoretical)").
+                   sort_values(by='sixty_game_win_percentage', ascending=False))
+
+        # NL Division leaders at 60 game mark
+        nl_sixty_best_theoretical = list(all_info.loc[year].sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
+                ascending=[True, False, True]).groupby('division').head(division_teams).loc[all_info.loc[year].
+                             sort_values(by=['division', 'sixty_game_win_percentage', 'season_result'],
+                ascending=[True, False, True]).groupby('division').head(division_teams).division.isin(nl_divisions), 'full_team'])
+        # NL Wild Card winning percentage at 60 games
+        nl_wild_card_at_sixty_winning_percentage_theoretical = list(all_info.loc[(year,)].query("(division in @nl_divisions) &"
+                                       " (full_team not in @nl_sixty_best_theoretical)").sort_values(by='sixty_game_win_percentage',
+                                       ascending=False).head(wild_card_teams)['sixty_game_win_percentage'])
+        nl_standings_sixty_game_mark_theoretical = all_info.loc[(year,)].query("full_team in @nl_sixty_best_theoretical").\
+            sort_values(by=['division', 'sixty_game_win_percentage'], ascending=[True, False]).\
+              append(all_info.loc[(year,)].query("(division in @nl_divisions) & (full_team not in @nl_sixty_best_theoretical) &"
+                                                 " (sixty_game_win_percentage in @nl_wild_card_at_sixty_winning_percentage_theoretical)").
+                                                 sort_values(by='sixty_game_win_percentage', ascending=False))
+
+        al_teams_expanded_playoffs_theoretical[(year, division_teams, wild_card_teams)] = \
+            (len(al_standings_sixty_game_mark_theoretical.loc[al_standings_sixty_game_mark_theoretical.season_result.notnull()]),
+            len(al_standings_sixty_game_mark_theoretical.loc[al_standings_sixty_game_mark_theoretical.season_result == "Division Winner"]),
+            len(al_standings_sixty_game_mark_theoretical.loc[al_standings_sixty_game_mark_theoretical.season_result == "Wild Card Winner"]))
+        nl_teams_expanded_playoffs_theoretical[(year, division_teams, wild_card_teams)] = \
+            (len(nl_standings_sixty_game_mark_theoretical.loc[nl_standings_sixty_game_mark_theoretical.season_result.notnull()]),
+            len(nl_standings_sixty_game_mark_theoretical.loc[nl_standings_sixty_game_mark_theoretical.season_result == "Division Winner"]),
+            len(nl_standings_sixty_game_mark_theoretical.loc[nl_standings_sixty_game_mark_theoretical.season_result == "Wild Card Winner"]))
+
+# Create DataFrame to determine combinations where both divisions got in 100% of playoff teams at sixty-game mark
+theoretical_division_wild_card_teams = []
+for (key, value), (key2, value2) in zip(al_teams_expanded_playoffs_theoretical.items(),
+                                        nl_teams_expanded_playoffs_theoretical.items()):
+    theoretical_division_wild_card_teams.append([key[0], key[1], key[2], value[0], value2[0]])
+
+for info in theoretical_division_wild_card_teams:
+    info.extend([al_contention_playoff_in_in_in_out_out_in[info[0]][1], nl_contention_playoff_in_in_in_out_out_in[info[0]][1]])
+
+theoretical_division_wild_card_teams = pd.DataFrame(theoretical_division_wild_card_teams)
+theoretical_division_wild_card_teams = theoretical_division_wild_card_teams.rename(columns={0:'year', 1:'num_division',
+                                                     2:'num_wild_card', 3:'american_league', 4:'national_league',
+                                                     5:'al_total_playoff_teams', 6:'nl_total_playoff_teams'})
+theoretical_division_wild_card_teams['american_league'] = \
+    theoretical_division_wild_card_teams['american_league']/theoretical_division_wild_card_teams['al_total_playoff_teams']
+theoretical_division_wild_card_teams['national_league'] = \
+    theoretical_division_wild_card_teams['national_league']/theoretical_division_wild_card_teams['nl_total_playoff_teams']
+theoretical_division_wild_card_teams = theoretical_division_wild_card_teams.drop(columns=['al_total_playoff_teams',
+                                                                                          'nl_total_playoff_teams'])
+both_divisions_season_end_playoff_teams_chosen = []
+for division_teams, wild_card_teams in product(num_teams, repeat=2):
+    per_product_df = theoretical_division_wild_card_teams.loc[(theoretical_division_wild_card_teams.num_division == division_teams) &
+                                                              (theoretical_division_wild_card_teams.num_wild_card == wild_card_teams)]
+    both_divisions_season_end_playoff_teams_chosen.append([division_teams, wild_card_teams,
+        len(per_product_df.loc[(per_product_df.american_league==1.0) & (per_product_df.national_league==1.0)])/len(playoff_years)])
+both_divisions_season_end_playoff_teams_chosen = pd.DataFrame(both_divisions_season_end_playoff_teams_chosen,
+                    columns=['num_division', 'num_wild_card', 'both_divisions_season_end_playoff_teams_chosen_perc'])
+
+
+### Descriptive, statistical analysis, and visualizations ###
+def wide_to_long_df(wide_df):
+    """Convert DataFrame from wide to long"""
+    # Use years for index
+    wide_df.index = pd.to_datetime(wide_df.index.values.astype('int'), format='%Y').year
+    # Set column names
+    wide_df = wide_df.rename(columns={1:'american_league', 2:'national_league'})
+    # Create DataFrame from wide to long
+    long_df = pd.melt(wide_df)
+    # Repeat index twice (AL and NL values have correct years)
+    long_df.index = list(wide_df.index)*2
+    return long_df
+
+# Set colors
+lineplot_colors = {"american_league": "#EE0A46", "national_league": "#0E4082"}
 
 # Traditional season
 # Create DataFrame of percentage of teams that were in playoff contention at 60 games and made playoffs at end of year
@@ -1039,14 +1148,7 @@ percentage_in_in_df = pd.DataFrame(data=[list(playoff_years),
                             al_contention_playoff_in_in_in_out_out_in[playoff_years][1], playoff_years)),
                           list(map(lambda playoff_years: len(nl_contention_playoff_in_in_in_out_out_in[playoff_years][2]) /
                             nl_contention_playoff_in_in_in_out_out_in[playoff_years][1], playoff_years))]).T.set_index([0])
-# Use years for index
-percentage_in_in_df.index = pd.to_datetime(percentage_in_in_df.index.values.astype('int'), format='%Y').year
-# Set column names
-percentage_in_in_df = percentage_in_in_df.rename(columns={1:'american_league', 2:'national_league'})
-# Create DataFrame from wide to long
-percentage_in_in_df_melt = pd.melt(percentage_in_in_df)
-# Repeat index twice (AL and NL values have correct years)
-percentage_in_in_df_melt.index = list(percentage_in_in_df.index)*2
+percentage_in_in_df_melt = wide_to_long_df(wide_df=percentage_in_in_df)
 
 # Expanded playoff season analysis (i.e. what they are doing for the 2020 playoff season)
 # Create DataFrame of percentage of teams, at the 60-game mark, that were playoffs teams at seasons end with expanded format
@@ -1057,40 +1159,31 @@ expanded_percentage_playoff_teams_captured_df = pd.DataFrame(data=[list(playoff_
                           list(map(lambda playoff_years:
                                    nl_teams_expanded_playoffs_actual_playoff_teams_actual_division_actual_wild_card[playoff_years][0]/
                             nl_contention_playoff_in_in_in_out_out_in[playoff_years][1], playoff_years))]).T.set_index([0])
-# Use years for index
-expanded_percentage_playoff_teams_captured_df.index = \
-    pd.to_datetime(expanded_percentage_playoff_teams_captured_df.index.values.astype('int'), format='%Y').year
-# Set column names
-expanded_percentage_playoff_teams_captured_df = expanded_percentage_playoff_teams_captured_df.\
-    rename(columns={1:'american_league', 2:'national_league'})
-# Create DataFrame from wide to long
-expanded_percentage_playoff_teams_captured_df_melt = pd.melt(expanded_percentage_playoff_teams_captured_df)
-# Repeat index twice (AL and NL values have correct years)
-expanded_percentage_playoff_teams_captured_df_melt.index = list(expanded_percentage_playoff_teams_captured_df.index)*2
+expanded_percentage_playoff_teams_captured_df_melt = wide_to_long_df(wide_df=expanded_percentage_playoff_teams_captured_df)
 
 ## Plot of percentage of teams that were in playoff contention at 60 games and made playoffs at end of year -
 # Traditional and Expanded
 fig, axes = plt.subplots(nrows=1, ncols=2, sharey=True)
-# fig.subplots_adjust(left=0.05, right=.99, top=0.90, bottom=0.04)
-# fig.suptitle('Distributions with Kernel Density Estimation (KDE) Overlaid ', fontweight='bold', fontsize=26)
-# fig.subplots_adjust(left=0.19, right=0.83, top=0.90, bottom=0.12, hspace=0.7, wspace = 0.25)
+fig.subplots_adjust(left=0.06, right=.99, top=0.88, bottom=0.075, wspace=0.15)
 
 # Set common parameters for each plot
-line_width = 3
-marker_width = 10
+line_width = 5
+marker_width = 12
 years = np.arange(min(percentage_in_in_df_melt.index), max(percentage_in_in_df_melt.index)+1, 1)
 rotation_angle = 45
-xtick_labels_fontsize = 22
+xtick_labels_fontsize = 18
 # ytick_labels_fontsize = 22
 subplot_title_fontsize = 22
+legend_fontsize = 20
 
 sns.lineplot(ax=axes[0], y=percentage_in_in_df_melt.value, x=percentage_in_in_df_melt.index,
              hue=percentage_in_in_df_melt.variable, palette=lineplot_colors, style=percentage_in_in_df_melt.variable,
              markers=True, dashes=False, linewidth=line_width, markersize=marker_width)
 # Set xticks to display each year
 axes[0].set_xticks(years)
-axes[0].set_xticklabels(labels=axes[0].get_xticks(), rotation=rotation_angle, fontdict ={'fontweight': 'bold',
-                                                                                         'fontsize': xtick_labels_fontsize})
+x_tick_labels = [x if x in (1995, 2000, 2010) else str(x)[2:] for x in axes[0].get_xticks()]
+axes[0].set_xticklabels(labels=x_tick_labels, rotation=rotation_angle,
+                        fontdict ={'fontweight': 'bold', 'fontsize': xtick_labels_fontsize})
 axes[0].set_ylabel("")
 axes[0].set_title("Traditional Playoff Format", fontdict ={'fontweight': 'bold', 'fontsize': subplot_title_fontsize})
 
@@ -1100,25 +1193,25 @@ sns.lineplot(ax=axes[1], y=expanded_percentage_playoff_teams_captured_df_melt.va
              palette=lineplot_colors, style=expanded_percentage_playoff_teams_captured_df_melt.variable,
              markers=True, dashes=False, linewidth=line_width, markersize=marker_width)
 axes[1].set_xticks(years)
-axes[1].set_xticklabels(labels=axes[0].get_xticks(), rotation=rotation_angle, fontdict ={'fontweight': 'bold',
+axes[1].set_xticklabels(labels=x_tick_labels, rotation=rotation_angle, fontdict ={'fontweight': 'bold',
                                                                                          'fontsize': xtick_labels_fontsize})
 axes[1].set_title("Expanded Playoff Format", fontdict ={'fontweight': 'bold', 'fontsize': subplot_title_fontsize})
 fig.suptitle('Percentage of Teams in Playoff Position at Sixty-Game Mark and Made Playoffs at End of Year',
              fontweight= 'bold', fontsize= 26)
-axes[0].set_yticklabels(labels=axes[0].get_yticks(), fontdict ={'fontweight': 'bold', 'fontsize': 22})
+axes[0].set_yticklabels(labels=axes[0].get_yticks(), fontdict ={'fontweight': 'bold', 'fontsize': 20})
 axes[0].yaxis.set_major_formatter(mtick.PercentFormatter(1.0))
 axes[0].get_legend().remove()
 axes[1].get_legend().remove()
 handles, legends = axes[1].get_legend_handles_labels()
-legends_spelled_out_dict = {'variable': "Legend",'american_league': "American League", 'national_league': "National League"}
-fig.legend(handles, legends_spelled_out_dict.values(), loc='upper left', bbox_to_anchor=(0.77, 1.0),
-           prop={'weight': 'bold', 'size': 14})
-# handles, legends = axes[1].get_legend_handles_labels()
-# legends_spelled_out_dict = {'american_league': "American League", 'national_league': "National League"}
-# fig.legend(handles[1:], legends_spelled_out_dict.values(), loc='upper left', bbox_to_anchor=(0.77, 1.0),
-#            prop={'weight': 'bold', 'size': 14})
-
-# fig.text(0.5, 0.04, 'Year', ha='center')
+legends_spelled_out_dict = {'variable': "Legend (For Both)",'american_league': "American League", 'national_league': "National League"}
+fig.legend(handles, legends_spelled_out_dict.values(),loc='upper left', bbox_to_anchor=(0.56, 0.23), edgecolor= "black",
+           prop={'weight': 'bold', 'size': legend_fontsize})
+# Move xtick labels for full years to left
+trans = mtrans.Affine2D().translate(-12,0)
+for num_ax in range(len(axes)):
+    for tick in axes[num_ax].get_xticklabels():
+        if len(tick.get_text()) == 4:
+            tick.set_transform(tick.get_transform() + trans)
 
 len(percentage_in_in_df.loc[(percentage_in_in_df.american_league==1.0) & (percentage_in_in_df.national_league==1.0)])
 len(percentage_in_in_df.loc[(percentage_in_in_df.american_league==1.0) & (percentage_in_in_df.national_league==1.0)])/len(percentage_in_in_df)
@@ -1145,11 +1238,20 @@ for value in [x for x in list(al_sixty_game_win_percentage_season_result['season
               if x not in season_results_not_to_replace]:
     al_sixty_game_win_percentage_season_result['season_result'] = \
         al_sixty_game_win_percentage_season_result['season_result'].replace(value, "Did Make Playoffs")
+
+left_adjust = 0.18
+right_adjust = 0.995
+top_adjust = 0.83
+bottom_adjust = 0.08
+swarmplot_size = 7
+marker_size = 12
+
 fig, axes = plt.subplots(nrows=1, ncols=1)
-# fig.subplots_adjust(left=0.05, right=0.95, top=0.90, bottom=0.12, hspace=0.7, wspace = 0.25)
+fig.subplots_adjust(left=left_adjust, right=right_adjust, top=top_adjust, bottom=bottom_adjust)
 sns.swarmplot(x= al_sixty_game_win_percentage_season_result.index.get_level_values(0),
               y=al_sixty_game_win_percentage_season_result.sixty_game_win_percentage,
-              hue=al_sixty_game_win_percentage_season_result.season_result, palette=swarmplot_colors)
+              hue=al_sixty_game_win_percentage_season_result.season_result, palette=swarmplot_colors,
+              size=swarmplot_size)
 # Verticl line between years to separate
 for xtick in axes.get_xticks()[:-1]:
     plt.axvline(x=xtick + 0.5, ymin=0.05, ymax=0.95, color=swarmplot_colors['vertical_line'])
@@ -1160,11 +1262,29 @@ for year_index, year in enumerate(al_sixty_game_win_percentage_season_result.ind
             if round(point[1],3) == round(al_sixty_game_win_percentage_season_result.loc[year].\
                   query("season_result == 'World Series Winner'")['sixty_game_win_percentage'].values[0],3):
                 if colors.to_hex(axes.get_children()[year_index].get_facecolors()[point_index]).upper() == swarmplot_colors['World Series Winner']:
-                    axes.plot(point[0], al_sixty_game_win_percentage_season_result.loc[year].
+                    world_series_marker = plt.plot(point[0], al_sixty_game_win_percentage_season_result.loc[year].
                               query("season_result == 'World Series Winner'")['sixty_game_win_percentage'].values[0],
-                              marker='*', markersize=12, color=swarmplot_colors["World Series Winner"])
+                              marker='*', markersize=marker_size, color=swarmplot_colors["World Series Winner"], drawstyle=None)
                     break
-
+axes.set_xticklabels(labels=x_tick_labels, rotation=rotation_angle,
+                        fontdict ={'fontweight': 'bold', 'fontsize': xtick_labels_fontsize})
+# Move xtick labels for full years to left
+trans = mtrans.Affine2D().translate(-12,0)
+for tick in axes.get_xticklabels():
+    if len(tick.get_text()) == 4:
+        tick.set_transform(tick.get_transform() + trans)
+# Set ylabels and yticklabels
+axes.set_ylabel("Sixty Game\nWinning\nPercentage", rotation=0, labelpad=90, fontdict ={'fontweight': 'bold', 'fontsize': 22})
+y_tick_labels = [str(round(i,1)).ljust(5, '0') for i in axes.get_yticks()]
+axes.set_yticklabels(labels=y_tick_labels, fontdict ={'fontweight': 'bold', 'fontsize': 20})
+# Set title
+axes.set_title("American League Final Standings", fontdict ={'fontweight': 'bold', 'fontsize': 26}, pad=20)
+# Legend
+world_series_marker[0].set_linestyle('None')
+handles, legends = axes.get_legend_handles_labels()
+handles[-1] = world_series_marker[0]
+axes.legend(handles, legends, title='Season Result', title_fontsize = 20, edgecolor= "black",
+            loc='upper right', bbox_to_anchor=(1.01, 1.235), prop={'weight': 'bold', 'size': 18})
 
 # National League
 nl_sixty_game_win_percentage_season_result = all_info.query("(division in @nl_divisions)")[["season_result",
@@ -1176,10 +1296,11 @@ for value in [x for x in list(nl_sixty_game_win_percentage_season_result['season
         nl_sixty_game_win_percentage_season_result['season_result'].replace(value, "Did Make Playoffs")
 
 fig, axes = plt.subplots(nrows=1, ncols=1)
-fig.subplots_adjust(left=0.05, right=0.95, top=0.90, bottom=0.12, hspace=0.7, wspace = 0.25)
+fig.subplots_adjust(left=left_adjust, right=right_adjust, top=top_adjust, bottom=bottom_adjust)
 nl_swarm_plot = sns.swarmplot(x= nl_sixty_game_win_percentage_season_result.index.get_level_values(0),
               y=nl_sixty_game_win_percentage_season_result.sixty_game_win_percentage,
-              hue=nl_sixty_game_win_percentage_season_result.season_result, palette=swarmplot_colors)
+              hue=nl_sixty_game_win_percentage_season_result.season_result, palette=swarmplot_colors,
+              size=swarmplot_size)
 # Verticl line between years to separate
 for xtick in nl_swarm_plot.get_xticks()[:-1]:
     plt.axvline(x=xtick + 0.5, ymin=0.05, ymax=0.95, color=swarmplot_colors['vertical_line'])
@@ -1192,13 +1313,27 @@ for year_index, year in enumerate(nl_sixty_game_win_percentage_season_result.ind
                 if colors.to_hex(axes.get_children()[year_index].get_facecolors()[point_index]).upper() == swarmplot_colors['World Series Winner']:
                     world_series_marker = plt.plot(point[0], nl_sixty_game_win_percentage_season_result.loc[year].
                               query("season_result == 'World Series Winner'")['sixty_game_win_percentage'].values[0],
-                              marker='*', markersize=12, color=swarmplot_colors["World Series Winner"], drawstyle=None)
+                              marker='*', markersize=marker_size, color=swarmplot_colors["World Series Winner"], drawstyle=None)
                     break
+axes.set_xticklabels(labels=x_tick_labels, rotation=rotation_angle,
+                        fontdict ={'fontweight': 'bold', 'fontsize': xtick_labels_fontsize})
+# Move xtick labels for full years to left
+trans = mtrans.Affine2D().translate(-12,0)
+for tick in axes.get_xticklabels():
+    if len(tick.get_text()) == 4:
+        tick.set_transform(tick.get_transform() + trans)
+# Set ylabels and yticklabels
+axes.set_ylabel("Sixty Game\nWinning\nPercentage", rotation=0, labelpad=90, fontdict ={'fontweight': 'bold', 'fontsize': 22})
+y_tick_labels = [str(round(i,1)).ljust(5, '0') for i in axes.get_yticks()]
+axes.set_yticklabels(labels=y_tick_labels, fontdict ={'fontweight': 'bold', 'fontsize': 20})
+# Set title
+axes.set_title("National League Final Standings", fontdict ={'fontweight': 'bold', 'fontsize': 26}, pad=20)
+# Legend
 world_series_marker[0].set_linestyle('None')
 handles, legends = axes.get_legend_handles_labels()
 handles[-1] = world_series_marker[0]
-fig.legend(handles, legends, loc='upper left', bbox_to_anchor=(0.77, 1.0),
-           prop={'weight': 'bold', 'size': 14})
+axes.legend(handles, legends, title='Season Result', title_fontsize = 20, edgecolor= "black",
+            loc='upper right', bbox_to_anchor=(1.01, 1.235), prop={'weight': 'bold', 'size': 18})
 
 
 
